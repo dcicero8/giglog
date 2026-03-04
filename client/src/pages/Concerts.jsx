@@ -1,0 +1,318 @@
+import { useState, useEffect, useCallback } from 'react'
+import { api } from '../lib/api'
+import { useApi } from '../hooks/useApi'
+import { useSetlistImport } from '../hooks/useSetlistImport'
+import ConcertCard from '../components/ConcertCard'
+import FestivalCard from '../components/FestivalCard'
+import SetlistViewer from '../components/SetlistViewer'
+import SetlistUrlInput from '../components/SetlistUrlInput'
+import StarRating from '../components/StarRating'
+import Modal from '../components/Modal'
+import FestivalImportModal from '../components/FestivalImportModal'
+
+const emptyForm = { artist: '', venue: '', city: '', date: '', price: '', rating: 0, notes: '', last_minute: false }
+
+export default function Concerts() {
+  const [concerts, setConcerts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [sort, setSort] = useState('date_desc')
+  const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState(emptyForm)
+  const [editId, setEditId] = useState(null)
+  const [setlistConcert, setSetlistConcert] = useState(null)
+  const { data: aiStatus } = useApi('/ai-status')
+  const aiAvailable = aiStatus?.available ?? false
+  const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: setlistLoading, error: setlistError, setError: setSetlistError, importUrl, importFestival } = useSetlistImport()
+  const [festivalData, setFestivalData] = useState(null)
+
+  const fetchConcerts = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (sort) params.set('sort', sort)
+      if (filter !== 'all') params.set('filter', filter)
+      if (search) params.set('search', search)
+      const data = await api.get(`/concerts?${params}`)
+      setConcerts(data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }, [sort, filter, search])
+
+  useEffect(() => { fetchConcerts() }, [fetchConcerts])
+
+  const openAdd = () => {
+    setForm(emptyForm)
+    setEditId(null)
+    setModalOpen(true)
+  }
+
+  const openEdit = (concert) => {
+    setForm({
+      artist: concert.artist || '',
+      venue: concert.venue || '',
+      city: concert.city || '',
+      date: concert.date || '',
+      price: concert.price ?? '',
+      rating: concert.rating || 0,
+      notes: concert.notes || '',
+      last_minute: !!concert.last_minute,
+    })
+    setEditId(concert.id)
+    setModalOpen(true)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const data = {
+      ...form,
+      price: form.price ? parseFloat(form.price) : null,
+      last_minute: form.last_minute,
+      setlist_fm_id: form.setlist_fm_id || null,
+      setlist_fm_url: form.setlist_fm_url || null,
+    }
+    if (editId) {
+      await api.put(`/concerts/${editId}`, data)
+    } else {
+      await api.post('/concerts', data)
+    }
+    setModalOpen(false)
+    fetchConcerts()
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this concert?')) return
+    await api.delete(`/concerts/${id}`)
+    fetchConcerts()
+  }
+
+  const importFromSetlistUrl = async () => {
+    const result = await importUrl()
+    if (result) {
+      setForm(result)
+      setEditId(null)
+      setModalOpen(true)
+    }
+  }
+
+  const handleFestivalImport = async () => {
+    const result = await importFestival()
+    if (result) {
+      setFestivalData(result)
+    }
+  }
+
+  const handleSetlistLink = async (concertId, setlistFmId) => {
+    await api.put(`/concerts/${concertId}`, { setlist_fm_id: setlistFmId })
+    fetchConcerts()
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-heading font-bold text-text">Past Concerts</h1>
+        <button
+          onClick={openAdd}
+          className="px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer"
+        >
+          + Add Concert
+        </button>
+      </div>
+
+      {/* Quick add from setlist.fm URL */}
+      <div className="mb-6">
+        <SetlistUrlInput
+          url={setlistUrl}
+          onUrlChange={setSetlistUrl}
+          altUrl={altSetlistUrl}
+          onAltUrlChange={setAltSetlistUrl}
+          onImport={importFromSetlistUrl}
+          onFestivalImport={handleFestivalImport}
+          loading={setlistLoading}
+          error={setlistError}
+          onClearError={() => setSetlistError(null)}
+        />
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <input
+          type="text"
+          placeholder="Search artist..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text placeholder:text-text-dim focus:outline-none focus:border-secondary w-full sm:w-auto"
+        />
+        <select
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          className="px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+        >
+          <option value="all">All Shows</option>
+          <option value="last_minute">Last-Minute Only</option>
+        </select>
+        <select
+          value={sort}
+          onChange={e => setSort(e.target.value)}
+          className="px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+        >
+          <option value="date_desc">Date (Newest)</option>
+          <option value="date_asc">Date (Oldest)</option>
+          <option value="price_desc">Price (High)</option>
+          <option value="price_asc">Price (Low)</option>
+          <option value="rating_desc">Rating (High)</option>
+          <option value="rating_asc">Rating (Low)</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-bg-card border border-border rounded-xl p-5 animate-pulse h-48" />
+          ))}
+        </div>
+      ) : concerts.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-text-muted text-lg mb-2">No concerts found</p>
+          <p className="text-text-dim text-sm">Start logging your show history!</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {concerts.map(concert => (
+            <div key={concert.id}>
+              {concert.children?.length > 0 ? (
+                <FestivalCard
+                  concert={concert}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  aiAvailable={aiAvailable}
+                  onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
+                />
+              ) : (
+                <>
+                  <ConcertCard
+                    concert={concert}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                    onViewSetlist={() => setSetlistConcert(setlistConcert?.id === concert.id ? null : concert)}
+                    aiAvailable={aiAvailable}
+                    onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
+                  />
+                  {setlistConcert?.id === concert.id && (
+                    <SetlistViewer
+                      concert={concert}
+                      onLink={(setlistFmId) => handleSetlistLink(concert.id, setlistFmId)}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Festival Import Modal */}
+      {festivalData && (
+        <FestivalImportModal
+          data={festivalData}
+          onClose={() => setFestivalData(null)}
+          onComplete={fetchConcerts}
+        />
+      )}
+
+      {/* Add/Edit Modal */}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editId ? 'Edit Concert' : 'Add Concert'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-text-muted mb-1">Artist *</label>
+            <input
+              type="text"
+              required
+              value={form.artist}
+              onChange={e => setForm({ ...form, artist: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-text-muted mb-1">Venue</label>
+              <input
+                type="text"
+                value={form.venue}
+                onChange={e => setForm({ ...form, venue: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-text-muted mb-1">City</label>
+              <input
+                type="text"
+                value={form.city}
+                onChange={e => setForm({ ...form, city: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-text-muted mb-1">Date</label>
+              <input
+                type="date"
+                value={form.date}
+                onChange={e => setForm({ ...form, date: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-text-muted mb-1">Price</label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.price}
+                onChange={e => setForm({ ...form, price: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-text-muted mb-1">Rating</label>
+            <StarRating rating={form.rating} onChange={r => setForm({ ...form, rating: r })} />
+          </div>
+          <div>
+            <label className="block text-sm text-text-muted mb-1">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={e => setForm({ ...form, notes: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary resize-y"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.last_minute}
+              onChange={e => setForm({ ...form, last_minute: e.target.checked })}
+              className="accent-accent"
+            />
+            Last-minute deal
+          </label>
+          <button
+            type="submit"
+            className="w-full px-4 py-2.5 text-sm font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer"
+          >
+            {editId ? 'Save Changes' : 'Add Concert'}
+          </button>
+        </form>
+      </Modal>
+    </div>
+  )
+}
