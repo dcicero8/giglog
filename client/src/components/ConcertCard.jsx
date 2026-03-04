@@ -172,16 +172,22 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
       )}
 
       <div className="flex flex-wrap gap-2 mt-auto pt-2 border-t border-border">
-        <button
-          onClick={() => onViewSetlist(concert)}
-          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border-0 cursor-pointer ${
-            setlistOpen
-              ? 'bg-secondary/30 text-secondary ring-1 ring-secondary/40'
-              : 'bg-secondary/10 text-secondary hover:bg-secondary/20'
-          }`}
-        >
-          {setlistOpen ? 'Hide Setlist' : 'View Setlist'}
-        </button>
+        {concert.setlist_fm_id ? (
+          <button
+            onClick={() => onViewSetlist(concert)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border-0 cursor-pointer ${
+              setlistOpen
+                ? 'bg-secondary/30 text-secondary ring-1 ring-secondary/40'
+                : 'bg-secondary/10 text-secondary hover:bg-secondary/20'
+            }`}
+          >
+            {setlistOpen ? 'Hide Setlist' : 'View Setlist'}
+          </button>
+        ) : (
+          <span className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white/5 text-text-dim/40">
+            View Setlist
+          </span>
+        )}
         <button
           onClick={() => setShowEbay(!showEbay)}
           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-success/10 text-success hover:bg-success/20 transition-colors border-0 cursor-pointer"

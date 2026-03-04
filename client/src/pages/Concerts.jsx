@@ -22,6 +22,7 @@ export default function Concerts() {
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState(null)
   const [setlistConcert, setSetlistConcert] = useState(null)
+  const [festivalBandSetlist, setFestivalBandSetlist] = useState(null) // { festivalId, child }
   const { data: aiStatus } = useApi('/ai-status')
   const aiAvailable = aiStatus?.available ?? false
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: setlistLoading, error: setlistError, setError: setSetlistError, importUrl, importFestival } = useSetlistImport()
@@ -184,19 +185,50 @@ export default function Concerts() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {concerts.map(concert => {
             const isSetlistOpen = setlistConcert?.id === concert.id
+            const isFestivalSetlistOpen = festivalBandSetlist?.festivalId === concert.id
             return (
               <div
                 key={concert.id}
-                className={isSetlistOpen ? 'md:col-span-2 lg:col-span-2' : ''}
+                className={(isSetlistOpen || isFestivalSetlistOpen) ? 'md:col-span-2 lg:col-span-2' : ''}
               >
                 {concert.children?.length > 0 ? (
-                  <FestivalCard
-                    concert={concert}
-                    onEdit={openEdit}
-                    onDelete={handleDelete}
-                    aiAvailable={aiAvailable}
-                    onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
-                  />
+                  festivalBandSetlist?.festivalId === concert.id ? (
+                    <div className="flex gap-4 items-stretch">
+                      <div className="flex-1 min-w-0">
+                        <FestivalCard
+                          concert={concert}
+                          onEdit={openEdit}
+                          onDelete={handleDelete}
+                          aiAvailable={aiAvailable}
+                          onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
+                          onViewBandSetlist={(child) => {
+                            if (child) setFestivalBandSetlist({ festivalId: concert.id, child })
+                            else setFestivalBandSetlist(null)
+                          }}
+                          activeBandId={festivalBandSetlist?.child?.id}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <SetlistViewer
+                          concert={festivalBandSetlist.child}
+                          onLink={(setlistFmId) => handleSetlistLink(festivalBandSetlist.child.id, setlistFmId)}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <FestivalCard
+                      concert={concert}
+                      onEdit={openEdit}
+                      onDelete={handleDelete}
+                      aiAvailable={aiAvailable}
+                      onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
+                      onViewBandSetlist={(child) => {
+                        if (child) setFestivalBandSetlist({ festivalId: concert.id, child })
+                        else setFestivalBandSetlist(null)
+                      }}
+                      activeBandId={null}
+                    />
+                  )
                 ) : isSetlistOpen ? (
                   <div className="flex gap-4 items-stretch">
                     <div className="flex-1 min-w-0">

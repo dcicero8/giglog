@@ -1,11 +1,9 @@
 import { useState, useRef } from 'react'
 import { api } from '../lib/api'
-import SetlistViewer from './SetlistViewer'
 import { getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 
-export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable }) {
+export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onViewBandSetlist, activeBandId }) {
   const [expanded, setExpanded] = useState(false)
-  const [expandedBand, setExpandedBand] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [reordering, setReordering] = useState(false)
   const ticketFileRef = useRef(null)
@@ -184,19 +182,31 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
                   <span className="text-xs text-text-dim w-5 text-right shrink-0">{index + 1}.</span>
 
                   {/* Band name */}
-                  <button
-                    onClick={() => setExpandedBand(expandedBand === child.id ? null : child.id)}
-                    className="flex-1 text-left text-sm text-text hover:text-accent transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium"
-                    title={expandedBand === child.id ? 'Collapse setlist' : 'View setlist'}
-                  >
-                    {child.artist}
-                  </button>
+                  {child.setlist_fm_id ? (
+                    <button
+                      onClick={() => onViewBandSetlist?.(activeBandId === child.id ? null : child)}
+                      className={`flex-1 text-left text-sm transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium ${
+                        activeBandId === child.id ? 'text-accent' : 'text-text hover:text-accent'
+                      }`}
+                      title={activeBandId === child.id ? 'Hide setlist' : 'View setlist'}
+                    >
+                      {child.artist}
+                    </button>
+                  ) : (
+                    <span className="flex-1 text-left text-sm text-text p-0 truncate font-medium">
+                      {child.artist}
+                    </span>
+                  )}
 
                   {/* Setlist indicator */}
                   {child.setlist_fm_id ? (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setExpandedBand(expandedBand === child.id ? null : child.id) }}
-                      className="text-[10px] text-success px-1.5 py-0.5 rounded-full bg-success/10 hover:bg-success/20 shrink-0 border-0 cursor-pointer transition-colors font-medium"
+                      onClick={(e) => { e.stopPropagation(); onViewBandSetlist?.(activeBandId === child.id ? null : child) }}
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 border-0 cursor-pointer transition-colors font-medium ${
+                        activeBandId === child.id
+                          ? 'text-success bg-success/30 ring-1 ring-success/40'
+                          : 'text-success bg-success/10 hover:bg-success/20'
+                      }`}
                     >
                       setlist
                     </button>
@@ -227,15 +237,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
                   </div>
                 </div>
 
-                {/* Expanded setlist for this band */}
-                {expandedBand === child.id && (
-                  <div className="ml-10 mr-3 mb-2">
-                    <SetlistViewer
-                      concert={child}
-                      onLink={(setlistFmId) => handleSetlistLink(child.id, setlistFmId)}
-                    />
-                  </div>
-                )}
+                {/* Setlist now renders to the RIGHT via parent layout */}
               </div>
             ))}
           </div>
