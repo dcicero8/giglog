@@ -1,9 +1,15 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, '..', 'giglog.db');
+
+// In production, use persistent volume; locally, use project root
+const dataDir = process.env.NODE_ENV === 'production' && fs.existsSync('/app/data')
+  ? '/app/data'
+  : path.join(__dirname, '..');
+const dbPath = path.join(dataDir, 'giglog.db');
 
 const db = new Database(dbPath);
 

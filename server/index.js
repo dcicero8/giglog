@@ -18,8 +18,11 @@ const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Ensure ticket uploads directory exists
-const ticketsDir = path.join(__dirname, '..', 'uploads', 'tickets');
+// In production, store uploads on persistent volume
+const uploadsBase = process.env.NODE_ENV === 'production' && fs.existsSync('/app/data')
+  ? '/app/data/uploads'
+  : path.join(__dirname, '..', 'uploads');
+const ticketsDir = path.join(uploadsBase, 'tickets');
 if (!fs.existsSync(ticketsDir)) fs.mkdirSync(ticketsDir, { recursive: true });
 
 // Multer config for ticket images
@@ -33,7 +36,7 @@ const ticketStorage = multer.diskStorage({
 const ticketUpload = multer({ storage: ticketStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Serve uploaded files (photos + tickets)
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/uploads', express.static(uploadsBase));
 
 // API routes
 app.use('/api/concerts', concertsRouter);
