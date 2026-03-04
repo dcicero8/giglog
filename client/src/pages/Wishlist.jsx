@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import WishlistCard from '../components/WishlistCard'
 import Modal from '../components/Modal'
 
-const emptyForm = { artist: '', priority: 'want_to_see', max_price: '', notes: '' }
+const emptyForm = { artist: '', priority: 'want_to_see', max_price: '', notes: '', url: '' }
 
 export default function Wishlist() {
   const { data: items, loading, refetch } = useApi('/wishlist')
@@ -26,6 +26,7 @@ export default function Wishlist() {
       priority: item.priority || 'want_to_see',
       max_price: item.max_price ?? '',
       notes: item.notes || '',
+      url: item.url || '',
     })
     setEditId(item.id)
     setModalOpen(true)
@@ -122,6 +123,11 @@ export default function Wishlist() {
             <label className="block text-sm text-text-muted mb-1">Notes</label>
             <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={3}
               className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary resize-y" />
+          </div>
+          <div>
+            <label className="block text-sm text-text-muted mb-1">Tour / Tickets URL (optional)</label>
+            <input type="url" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary" placeholder="https://..." />
           </div>
           <button type="submit"
             className="w-full px-4 py-2.5 text-sm font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer">

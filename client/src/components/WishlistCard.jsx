@@ -34,6 +34,13 @@ export default function WishlistCard({ item, onPromote, onEdit, onDelete }) {
         )}
       </div>
 
+      {item.url && (
+        <a href={item.url} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm text-secondary hover:text-secondary/80 mb-3 truncate max-w-full">
+          🔗 Tour / Tickets Page
+        </a>
+      )}
+
       {item.notes && (
         <p className="text-sm text-text-muted mb-3 line-clamp-2">{item.notes}</p>
       )}

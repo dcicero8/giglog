@@ -98,6 +98,7 @@ const migrations = [
   "ALTER TABLE upcoming ADD COLUMN ticket_image TEXT",
   "ALTER TABLE concerts ADD COLUMN parent_concert_id INTEGER",
   "ALTER TABLE concerts ADD COLUMN display_order INTEGER DEFAULT 0",
+  "ALTER TABLE wishlist ADD COLUMN url TEXT",
 ];
 
 for (const sql of migrations) {
