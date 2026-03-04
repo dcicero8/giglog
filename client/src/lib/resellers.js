@@ -2,7 +2,7 @@ const encode = (s) => encodeURIComponent(s)
 
 export const RESELLERS = [
   { name: 'StubHub', key: 'stubhub', getUrl: (a) => `https://www.stubhub.com/search?q=${encode(a)}` },
-  { name: 'SeatGeek', key: 'seatgeek', getUrl: (a) => `https://seatgeek.com/search?q=${encode(a)}` },
+  { name: 'SeatGeek', key: 'seatgeek', getUrl: (a) => `https://seatgeek.com/${a.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-tickets` },
   { name: 'Vivid Seats', key: 'vividseats', getUrl: (a) => `https://www.vividseats.com/search?searchTerm=${encode(a)}` },
   { name: 'Ticketmaster', key: 'ticketmaster', getUrl: (a) => `https://www.ticketmaster.com/search?q=${encode(a)}` },
   { name: 'TickPick', key: 'tickpick', getUrl: (a) => `https://www.tickpick.com/search?q=${encode(a)}` },
