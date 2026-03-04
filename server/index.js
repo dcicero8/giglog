@@ -140,7 +140,7 @@ app.get('/api/geocode', async (req, res) => {
 const TICKET_STYLES = ['classic', 'punk', 'psychedelic', 'minimal', 'vintage', 'festival'];
 
 app.post('/api/concerts/:id/generate-ticket', async (req, res) => {
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(400).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  if (!process.env.GEMINI_API_KEY) return res.status(400).json({ error: 'GEMINI_API_KEY not configured' });
   const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
   if (!concert) return res.status(404).json({ error: 'Concert not found' });
   const style = TICKET_STYLES.includes(req.body.style) ? req.body.style : 'classic';
@@ -154,7 +154,7 @@ app.post('/api/concerts/:id/generate-ticket', async (req, res) => {
 });
 
 app.post('/api/upcoming/:id/generate-ticket', async (req, res) => {
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(400).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  if (!process.env.GEMINI_API_KEY) return res.status(400).json({ error: 'GEMINI_API_KEY not configured' });
   const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
   if (!show) return res.status(404).json({ error: 'Show not found' });
   const style = TICKET_STYLES.includes(req.body.style) ? req.body.style : 'classic';
@@ -168,7 +168,7 @@ app.post('/api/upcoming/:id/generate-ticket', async (req, res) => {
 });
 
 app.get('/api/ai-status', (req, res) => {
-  res.json({ available: !!process.env.ANTHROPIC_API_KEY });
+  res.json({ available: !!process.env.GEMINI_API_KEY });
 });
 
 // Ticket image upload (concerts)
@@ -234,19 +234,7 @@ async function generateTicketArt(concert, style) {
   const formattedDate = concert.date
     ? new Date(concert.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : 'Date TBD';
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 4000,
-      messages: [{
-        role: 'user',
-        content: `Generate a complete, self-contained SVG concert ticket (800x300px) for:
+  const prompt = `Generate a complete, self-contained SVG concert ticket (800x300px) for:
 
 Artist: ${concert.artist}
 Venue: ${concert.venue || 'Unknown Venue'}
@@ -261,15 +249,28 @@ Design it as a stylish collectible ticket stub with a tear-off section on the ri
 Use bold creative typography for the artist name. Include a fake barcode on the stub.
 Make the color palette and visual style match the "${style}" aesthetic.
 Use dark backgrounds that work well on a dark-themed UI.
-Return ONLY the SVG code, no explanation or markdown.`
-      }]
-    })
-  });
-  if (!response.ok) throw new Error(`API returned ${response.status}`);
+Return ONLY the SVG code, no explanation or markdown.`;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 8000 },
+      }),
+    }
+  );
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Gemini API returned ${response.status}: ${errBody}`);
+  }
   const data = await response.json();
-  let svg = data.content[0].text;
+  let svg = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const svgMatch = svg.match(/<svg[\s\S]*<\/svg>/i);
   if (svgMatch) svg = svgMatch[0];
+  if (!svg.includes('<svg')) throw new Error('No valid SVG returned');
   return svg;
 }
 
