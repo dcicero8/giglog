@@ -194,9 +194,14 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
                   {/* Setlist indicator */}
                   {child.setlist_fm_id ? (
-                    <span className="text-[10px] text-success px-1.5 py-0.5 rounded-full bg-success/10 shrink-0">setlist</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setExpandedBand(expandedBand === child.id ? null : child.id) }}
+                      className="text-[10px] text-success px-1.5 py-0.5 rounded-full bg-success/10 hover:bg-success/20 shrink-0 border-0 cursor-pointer transition-colors font-medium"
+                    >
+                      setlist
+                    </button>
                   ) : (
-                    <span className="text-[10px] text-text-dim px-1.5 py-0.5 rounded-full bg-white/5 shrink-0">no setlist</span>
+                    <span className="text-[10px] text-text-dim/40 px-1.5 py-0.5 rounded-full bg-white/5 shrink-0">setlist</span>
                   )}
 
                   {/* Quick links - visible on hover */}
