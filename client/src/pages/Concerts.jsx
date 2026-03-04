@@ -182,36 +182,54 @@ export default function Concerts() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {concerts.map(concert => (
-            <div key={concert.id}>
-              {concert.children?.length > 0 ? (
-                <FestivalCard
-                  concert={concert}
-                  onEdit={openEdit}
-                  onDelete={handleDelete}
-                  aiAvailable={aiAvailable}
-                  onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
-                />
-              ) : (
-                <>
+          {concerts.map(concert => {
+            const isSetlistOpen = setlistConcert?.id === concert.id
+            return (
+              <div
+                key={concert.id}
+                className={isSetlistOpen ? 'md:col-span-2 lg:col-span-2' : ''}
+              >
+                {concert.children?.length > 0 ? (
+                  <FestivalCard
+                    concert={concert}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                    aiAvailable={aiAvailable}
+                    onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
+                  />
+                ) : isSetlistOpen ? (
+                  <div className="flex gap-4 items-stretch">
+                    <div className="flex-1 min-w-0">
+                      <ConcertCard
+                        concert={concert}
+                        onEdit={openEdit}
+                        onDelete={handleDelete}
+                        onViewSetlist={() => setSetlistConcert(null)}
+                        aiAvailable={aiAvailable}
+                        onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
+                        setlistOpen
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <SetlistViewer
+                        concert={concert}
+                        onLink={(setlistFmId) => handleSetlistLink(concert.id, setlistFmId)}
+                      />
+                    </div>
+                  </div>
+                ) : (
                   <ConcertCard
                     concert={concert}
                     onEdit={openEdit}
                     onDelete={handleDelete}
-                    onViewSetlist={() => setSetlistConcert(setlistConcert?.id === concert.id ? null : concert)}
+                    onViewSetlist={() => setSetlistConcert(concert)}
                     aiAvailable={aiAvailable}
                     onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
                   />
-                  {setlistConcert?.id === concert.id && (
-                    <SetlistViewer
-                      concert={concert}
-                      onLink={(setlistFmId) => handleSetlistLink(concert.id, setlistFmId)}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 

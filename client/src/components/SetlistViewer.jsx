@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../lib/api'
 
 export default function SetlistViewer({ concert, onLink }) {
@@ -7,20 +7,25 @@ export default function SetlistViewer({ concert, onLink }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const fetchSetlist = async () => {
+  // Auto-fetch setlist on mount — no second button click needed
+  useEffect(() => {
     if (concert.setlist_fm_id) {
-      setLoading(true)
-      setError(null)
-      try {
-        const data = await api.get(`/setlistfm/setlist/${concert.setlist_fm_id}`)
-        setSetlist(data)
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
+      fetchSetlist()
     } else {
       searchSetlists()
+    }
+  }, [concert.id])
+
+  const fetchSetlist = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.get(`/setlistfm/setlist/${concert.setlist_fm_id}`)
+      setSetlist(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -75,20 +80,8 @@ export default function SetlistViewer({ concert, onLink }) {
     ))
   }
 
-  if (!setlist && !searchResults) {
-    return (
-      <button
-        onClick={fetchSetlist}
-        disabled={loading}
-        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer disabled:opacity-50"
-      >
-        {loading ? 'Loading...' : concert.setlist_fm_id ? 'View Setlist' : 'Search Setlist'}
-      </button>
-    )
-  }
-
   return (
-    <div className="mt-3 p-4 rounded-lg bg-bg-input border border-border">
+    <div className="p-4 rounded-lg bg-bg-input border border-border h-full overflow-y-auto">
       {loading && <p className="text-text-muted text-sm">Searching setlist.fm...</p>}
       {error && <p className="text-accent text-sm">{error}</p>}
 
@@ -156,13 +149,6 @@ export default function SetlistViewer({ concert, onLink }) {
               {setlist.artist?.name} setlist on setlist.fm
             </a>
           </p>
-
-          <button
-            onClick={() => { setSetlist(null); setSearchResults(null) }}
-            className="mt-2 text-xs text-text-muted hover:text-text bg-transparent border-0 cursor-pointer"
-          >
-            Close
-          </button>
         </div>
       )}
     </div>
