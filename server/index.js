@@ -323,7 +323,7 @@ Return ONLY the JSON, no markdown, no explanation.`,
 });
 
 // AI ticket art generation
-const TICKET_STYLES = ['classic', 'punk', 'psychedelic', 'minimal', 'vintage', 'festival'];
+const TICKET_STYLES = ['blue', 'gold', 'red', 'green', 'pink', 'orange', 'random'];
 
 app.post('/api/concerts/:id/generate-ticket', async (req, res) => {
   if (!process.env.GEMINI_API_KEY) return res.status(400).json({ error: 'GEMINI_API_KEY not configured' });
@@ -476,24 +476,59 @@ app.delete('/api/upcoming/:id/poster-image', (req, res) => {
 
 async function generateTicketArt(concert, style) {
   const formattedDate = concert.date
-    ? new Date(concert.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    ? new Date(concert.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
     : 'Date TBD';
-  const prompt = `Generate a complete, self-contained SVG concert ticket (800x300px) for:
 
-Artist: ${concert.artist}
-Venue: ${concert.venue || 'Unknown Venue'}
-City: ${concert.city || ''}
-Date: ${formattedDate}
-Price: ${concert.price ? '$' + concert.price : 'N/A'}
-Rating: ${concert.rating ? concert.rating + '/5 stars' : 'N/A'}
-Style: ${style}
-${concert.last_minute ? 'This was a last-minute deal — include a stamp/badge for that' : ''}
+  const dateObj = concert.date ? new Date(concert.date + 'T00:00:00') : null;
+  const dayOfWeek = dateObj ? dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase() : '';
+  const monthDay = dateObj ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase() : '';
+  const year = dateObj ? dateObj.getFullYear() : '';
 
-Design it as a stylish collectible ticket stub with a tear-off section on the right.
-Use bold creative typography for the artist name. Include a fake barcode on the stub.
-Make the color palette and visual style match the "${style}" aesthetic.
-Use dark backgrounds that work well on a dark-themed UI.
-Return ONLY the SVG code, no explanation or markdown.`;
+  // Generate fake ticket metadata
+  const ticketCode = `${String.fromCharCode(65 + Math.floor(Math.random()*26))}${String.fromCharCode(65 + Math.floor(Math.random()*26))}${String(Math.floor(Math.random()*9000)+1000)}${String.fromCharCode(65 + Math.floor(Math.random()*26))}`;
+  const serialNum = `${Math.floor(Math.random()*900)+100}${Math.floor(Math.random()*90)+10}`;
+  const section = concert.notes?.match(/sec(?:tion)?\s*(\w+)/i)?.[1] || 'GENADM';
+  const row = concert.notes?.match(/row\s*(\w+)/i)?.[1] || '';
+  const seat = concert.notes?.match(/seat\s*(\w+)/i)?.[1] || '';
+
+  const colorSchemes = {
+    blue: 'steel blue (#4682B4) and light blue (#87CEEB)',
+    gold: 'golden yellow (#DAA520) and warm cream (#FFF8DC)',
+    red: 'deep red (#B22222) and salmon (#FA8072)',
+    green: 'forest green (#228B22) and mint (#98FB98)',
+    pink: 'hot pink (#FF69B4) and light pink (#FFB6C1)',
+    orange: 'burnt orange (#CC5500) and peach (#FFDAB9)',
+  };
+
+  const actualStyle = style === 'random'
+    ? Object.keys(colorSchemes)[Math.floor(Math.random() * Object.keys(colorSchemes).length)]
+    : style;
+  const colors = colorSchemes[actualStyle] || colorSchemes.blue;
+
+  const prompt = `Generate an SVG (800x300px) that looks EXACTLY like a real physical concert ticket stub from the late 1980s or early 1990s — like a Ticketmaster, Ticketron, or Bass ticket.
+
+CONCERT INFO:
+- Event: ${concert.artist}
+- Venue: ${concert.venue || 'VENUE'}
+- City: ${concert.city || ''}
+- Date: ${dayOfWeek} ${monthDay}, ${year}
+- Price: ${concert.price ? '$' + Number(concert.price).toFixed(2) : '0.00'}
+- Section: ${section}${row ? ` Row: ${row}` : ''}${seat ? ` Seat: ${seat}` : ''}
+- Ticket code: ${ticketCode}
+- Serial: ${serialNum}
+
+CRITICAL DESIGN RULES — follow these exactly:
+1. Color scheme: Use ${colors} as the main ticket stock colors. The ticket should look like it's printed on colored cardstock.
+2. Layout: Main ticket on the left (~600px), tear-off stub on the right (~200px) separated by a dashed/perforated line.
+3. Typography: ALL TEXT MUST BE UPPERCASE. Use bold, blocky sans-serif fonts (like Impact, Arial Black). The venue name should be very prominent at the top. The artist/event name should be large and bold.
+4. Include realistic ticket details scattered around: "NO REFUNDS/EXCHANGES", "SERVICE/HANDLING CHARGES NOT REFUNDABLE", event codes, section/row/seat, the price, the date and time like "7:30PM" or "DOORS 7PM".
+5. The tear-off stub should repeat key info: date, event code, section, and "GEN ADM" or section info.
+6. Include a fake barcode (simple black vertical lines of varying width) at the bottom of the main section.
+7. Make it look slightly rough/authentic — not too clean or digital. Use slightly different background shade rectangles, like real printed ticket stock has colored bands/sections.
+8. DO NOT use any gradients, drop shadows, or modern design elements. This should look like it came out of a dot-matrix or thermal printer on colored stock paper.
+9. The overall vibe should match real tickets from concerts like Lollapalooza '92, Grateful Dead '87, or Pink Floyd '94 — utilitarian, dense with info, printed on colored stock.
+
+Return ONLY the SVG code. No markdown, no explanation, no code fences.`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,

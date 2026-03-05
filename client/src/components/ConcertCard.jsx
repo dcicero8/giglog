@@ -4,7 +4,7 @@ import TicketArtSVG from './TicketArtSVG'
 import { EBAY_CATEGORIES, getEbayUrl, getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 import { api } from '../lib/api'
 
-const STYLES = ['classic', 'punk', 'psychedelic', 'minimal', 'vintage', 'festival']
+const STYLES = ['blue', 'gold', 'red', 'green', 'pink', 'orange', 'random']
 
 const YT_MATCH_ICONS = {
   exact: { dot: 'bg-[#4ade80]', label: 'Exact show' },
@@ -432,7 +432,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
                 disabled={generating}
                 className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {generating ? 'Designing...' : concert.ticket_art_svg ? 'Regenerate AI Art' : 'Generate AI Art'}
+                {generating ? 'Printing...' : concert.ticket_art_svg ? '🎟️ Reprint Ticket' : '🎟️ Print Ticket'}
               </button>
             </>
           )}
