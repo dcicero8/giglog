@@ -499,6 +499,9 @@ Return ONLY the SVG code, no explanation or markdown.`;
     }
   );
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error('Gemini API free tier quota exceeded — try again tomorrow or upgrade your plan');
+    }
     const errBody = await response.text();
     throw new Error(`Gemini API returned ${response.status}: ${errBody}`);
   }

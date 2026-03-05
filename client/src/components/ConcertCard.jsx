@@ -37,7 +37,12 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
       onUpdate?.({ ...concert, ticket_art_svg: result.ticket_art_svg })
       setShowArt(true)
     } catch (err) {
-      alert('Failed to generate: ' + err.message)
+      const msg = err.message || ''
+      if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
+        alert('Gemini API free tier quota exceeded. The limit resets daily — try again tomorrow, or upgrade your Gemini API plan.')
+      } else {
+        alert('Failed to generate: ' + msg)
+      }
     } finally {
       setGenerating(false)
     }
