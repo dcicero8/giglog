@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useApi } from '../hooks/useApi'
 import { useSetlistImport } from '../hooks/useSetlistImport'
@@ -12,6 +13,7 @@ import FestivalImportModal from '../components/FestivalImportModal'
 const emptyForm = { artist: '', venue: '', city: '', date: '', end_date: '', price: '', rating: 0, notes: '', last_minute: false }
 
 export default function Concerts() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [concerts, setConcerts] = useState([])
   const [loading, setLoading] = useState(true)
   const [sort, setSort] = useState('date_desc')
@@ -21,6 +23,7 @@ export default function Concerts() {
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState(null)
   const [setlistConcert, setSetlistConcert] = useState(null)
+  const [highlightId, setHighlightId] = useState(null)
   const { data: aiStatus } = useApi('/ai-status')
   const aiAvailable = aiStatus?.available ?? false
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: setlistLoading, error: setlistError, setError: setSetlistError, importUrl, importFestival } = useSetlistImport()
@@ -29,6 +32,25 @@ export default function Concerts() {
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState(null)
   const scanFileRef = useRef(null)
+
+  // Scroll to highlighted concert from carousel click
+  useEffect(() => {
+    const hId = searchParams.get('highlight')
+    if (hId && !loading && concerts.length > 0) {
+      setHighlightId(Number(hId))
+      // Clear the param from URL so refreshing doesn't re-scroll
+      setSearchParams({}, { replace: true })
+      // Wait for render, then scroll
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`concert-${hId}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          // Clear highlight after animation
+          setTimeout(() => setHighlightId(null), 2500)
+        }
+      })
+    }
+  }, [searchParams, loading, concerts, setSearchParams])
 
   const fetchConcerts = useCallback(async () => {
     setLoading(true)
@@ -273,8 +295,13 @@ export default function Concerts() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {concerts.map(concert => {
             const isSetlistOpen = setlistConcert?.id === concert.id
+            const isHighlighted = highlightId === concert.id
             return (
-              <div key={concert.id}>
+              <div
+                key={concert.id}
+                id={`concert-${concert.id}`}
+                className={`transition-all duration-700 rounded-xl ${isHighlighted ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg scale-[1.02]' : ''}`}
+              >
                 {concert.children?.length > 0 ? (
                   <FestivalCard
                     concert={concert}

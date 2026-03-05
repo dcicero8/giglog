@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import UpcomingCard from '../components/UpcomingCard'
@@ -9,7 +10,9 @@ import Modal from '../components/Modal'
 const emptyForm = { artist: '', venue: '', city: '', date: '', price: '', section: '', last_minute: false, notes: '' }
 
 export default function Upcoming() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: shows, loading, refetch } = useApi('/upcoming')
+  const [highlightId, setHighlightId] = useState(null)
   const { data: wishlist } = useApi('/wishlist')
   const { data: pastArtists } = useApi('/past-artists')
   const { data: aiStatus } = useApi('/ai-status')
@@ -23,6 +26,22 @@ export default function Upcoming() {
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState(null)
   const scanFileRef = useRef(null)
+
+  // Scroll to highlighted show from carousel click
+  useEffect(() => {
+    const hId = searchParams.get('highlight')
+    if (hId && !loading && shows?.length > 0) {
+      setHighlightId(Number(hId))
+      setSearchParams({}, { replace: true })
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`upcoming-${hId}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          setTimeout(() => setHighlightId(null), 2500)
+        }
+      })
+    }
+  }, [searchParams, loading, shows, setSearchParams])
 
   // On Deck (SeatGeek)
   const [seatgeekAvailable, setSeatgeekAvailable] = useState(false)
@@ -277,13 +296,18 @@ export default function Upcoming() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {shows.map(show => (
-              <UpcomingCard
+              <div
                 key={show.id}
+                id={`upcoming-${show.id}`}
+                className={`transition-all duration-700 rounded-xl ${highlightId === show.id ? 'ring-2 ring-secondary ring-offset-2 ring-offset-bg scale-[1.02]' : ''}`}
+              >
+              <UpcomingCard
                 show={show}
                 onComplete={openComplete}
                 onEdit={openEdit}
                 onDelete={handleDelete}
               />
+              </div>
             ))}
           </div>
         )}

@@ -69,7 +69,7 @@ export default function Dashboard() {
           </div>
           <TicketCarousel
             tickets={tickets.slice(0, 15)}
-            onTicketClick={(t) => navigate(t.type === 'past' ? '/concerts' : '/upcoming')}
+            onTicketClick={(t) => navigate(t.type === 'past' ? `/concerts?highlight=${t.id}` : `/upcoming?highlight=${t.id}`)}
           />
         </section>
       )}
