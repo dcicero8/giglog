@@ -159,47 +159,77 @@ app.get('/api/seatgeek/status', (req, res) => {
 app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
-  const cacheKey = 'seatgeek_la_concerts_60d_v2';
+  const cacheKey = 'seatgeek_la_concerts_60d_v3';
   const cached = db.prepare('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = ?').get(cacheKey);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
   }
 
+  const mapEvent = (e) => ({
+    id: e.id,
+    title: e.short_title || e.title,
+    artist: e.performers?.[0]?.name || e.title,
+    venue: e.venue?.name || '',
+    city: e.venue?.city || '',
+    state: e.venue?.state || '',
+    date: e.datetime_local ? e.datetime_local.split('T')[0] : null,
+    time: e.datetime_local ? e.datetime_local.split('T')[1]?.slice(0, 5) : null,
+    url: e.url,
+    image: e.performers?.[0]?.image || null,
+    lowest_price: e.stats?.lowest_price || null,
+    average_price: e.stats?.average_price || null,
+    listing_count: e.stats?.listing_count || 0,
+  });
+
   try {
     const today = new Date().toISOString().split('T')[0];
     const future = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const params = new URLSearchParams({
+    const baseParams = {
       'lat': '34.0522',
       'lon': '-118.2437',
       'range': '30mi',
       'taxonomies.name': 'concert',
       'datetime_local.gte': today,
       'datetime_local.lte': future,
-      'per_page': '200',
       'sort': 'datetime_local.asc',
       'client_id': process.env.SEATGEEK_CLIENT_ID,
       ...(process.env.SEATGEEK_CLIENT_SECRET ? { 'client_secret': process.env.SEATGEEK_CLIENT_SECRET } : {}),
-    });
+    };
 
-    const response = await fetch(`https://api.seatgeek.com/2/events?${params}`);
-    if (!response.ok) throw new Error(`SeatGeek API returned ${response.status}`);
-    const data = await response.json();
+    // 1. General LA events feed (discovery)
+    const generalParams = new URLSearchParams({ ...baseParams, 'per_page': '200' });
+    const generalRes = await fetch(`https://api.seatgeek.com/2/events?${generalParams}`);
+    if (!generalRes.ok) throw new Error(`SeatGeek API returned ${generalRes.status}`);
+    const generalData = await generalRes.json();
+    const generalEvents = (generalData.events || []).map(mapEvent);
 
-    const events = (data.events || []).map(e => ({
-      id: e.id,
-      title: e.short_title || e.title,
-      artist: e.performers?.[0]?.name || e.title,
-      venue: e.venue?.name || '',
-      city: e.venue?.city || '',
-      state: e.venue?.state || '',
-      date: e.datetime_local ? e.datetime_local.split('T')[0] : null,
-      time: e.datetime_local ? e.datetime_local.split('T')[1]?.slice(0, 5) : null,
-      url: e.url,
-      image: e.performers?.[0]?.image || null,
-      lowest_price: e.stats?.lowest_price || null,
-      average_price: e.stats?.average_price || null,
-      listing_count: e.stats?.listing_count || 0,
-    }));
+    // 2. Targeted searches for each wishlist artist (guarantees they appear)
+    const wishlistArtists = db.prepare('SELECT artist FROM wishlist').all();
+    const seenIds = new Set(generalEvents.map(e => e.id));
+    const wishlistEvents = [];
+
+    for (const { artist } of wishlistArtists) {
+      try {
+        const artistParams = new URLSearchParams({ ...baseParams, 'per_page': '10', 'q': artist });
+        const artistRes = await fetch(`https://api.seatgeek.com/2/events?${artistParams}`);
+        if (artistRes.ok) {
+          const artistData = await artistRes.json();
+          for (const e of (artistData.events || [])) {
+            if (!seenIds.has(e.id)) {
+              seenIds.add(e.id);
+              wishlistEvents.push(mapEvent(e));
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`SeatGeek wishlist search failed for "${artist}":`, err.message);
+      }
+    }
+
+    // Combine and sort by date
+    const events = [...generalEvents, ...wishlistEvents].sort((a, b) =>
+      (a.date || '').localeCompare(b.date || '')
+    );
 
     // Cache for 1 hour
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -209,7 +239,6 @@ app.get('/api/seatgeek/events', async (req, res) => {
     res.json(events);
   } catch (err) {
     console.error('SeatGeek fetch error:', err);
-    // Return stale cache if available
     if (cached) return res.json(JSON.parse(cached.response));
     res.status(500).json({ error: 'Failed to fetch events: ' + err.message });
   }
