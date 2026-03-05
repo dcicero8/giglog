@@ -275,7 +275,21 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
 
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-heading font-bold text-base text-text truncate">{concert.artist}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-heading font-bold text-base text-text truncate">{concert.artist}</h3>
+            {concert.setlist_fm_id ? (
+              <button
+                onClick={() => onViewSetlist(concert)}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors border-0 cursor-pointer shrink-0 ${
+                  setlistOpen
+                    ? 'bg-secondary/30 text-secondary ring-1 ring-secondary/40'
+                    : 'bg-secondary/10 text-secondary hover:bg-secondary/20'
+                }`}
+              >
+                {setlistOpen ? 'Hide Setlist' : 'View Setlist'}
+              </button>
+            ) : null}
+          </div>
           <p className="text-sm text-text-muted mt-1">
             {[concert.venue, concert.city].filter(Boolean).join(' · ')}
           </p>
@@ -309,22 +323,6 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
       )}
 
       <div className="flex flex-wrap gap-2 mt-auto pt-2 border-t border-border">
-        {concert.setlist_fm_id ? (
-          <button
-            onClick={() => onViewSetlist(concert)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border-0 cursor-pointer ${
-              setlistOpen
-                ? 'bg-secondary/30 text-secondary ring-1 ring-secondary/40'
-                : 'bg-secondary/10 text-secondary hover:bg-secondary/20'
-            }`}
-          >
-            {setlistOpen ? 'Hide Setlist' : 'View Setlist'}
-          </button>
-        ) : (
-          <span className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white/5 text-text-dim/40">
-            View Setlist
-          </span>
-        )}
         <button
           onClick={() => setShowEbay(!showEbay)}
           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-success/10 text-success hover:bg-success/20 transition-colors border-0 cursor-pointer"
