@@ -48,6 +48,15 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
     }
   }
 
+  const handleRating = async (newRating) => {
+    try {
+      await api.put(`/concerts/${concert.id}`, { rating: newRating })
+      onUpdate?.({ ...concert, rating: newRating })
+    } catch (err) {
+      alert('Failed to save rating: ' + err.message)
+    }
+  }
+
   const handleTicketUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -214,11 +223,9 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
         )}
       </div>
 
-      {concert.rating > 0 && (
-        <div className="mb-3">
-          <StarRating rating={concert.rating} readonly size="sm" />
-        </div>
-      )}
+      <div className="mb-3">
+        <StarRating rating={concert.rating || 0} onChange={handleRating} size="sm" />
+      </div>
 
       {concert.notes && (
         <p className="text-sm text-text-muted mb-3 line-clamp-2">{concert.notes}</p>

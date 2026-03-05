@@ -136,6 +136,15 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
     }
   }
 
+  const handleRating = async (newRating) => {
+    try {
+      await api.put(`/concerts/${concert.id}`, { rating: newRating })
+      onUpdate?.({ ...concert, rating: newRating, children })
+    } catch (err) {
+      alert('Failed to save rating: ' + err.message)
+    }
+  }
+
   const handleSetlistLink = async (childId, setlistFmId) => {
     await api.put(`/concerts/${childId}`, { setlist_fm_id: setlistFmId })
     const updatedChildren = children.map(c =>
@@ -287,11 +296,9 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             {formattedDate && (
               <p className="text-sm text-text-muted mt-0.5">{formattedDate}</p>
             )}
-            {concert.rating > 0 && (
-              <div className="mt-1">
-                <StarRating rating={concert.rating} readonly size="sm" />
-              </div>
-            )}
+            <div className="mt-1">
+              <StarRating rating={concert.rating || 0} onChange={handleRating} size="sm" />
+            </div>
           </div>
           <div className="flex items-center gap-1 ml-2 shrink-0">
             <button onClick={() => onEdit(concert)} className="text-text-muted hover:text-text bg-transparent border-0 cursor-pointer p-1 text-sm" title="Edit festival">
