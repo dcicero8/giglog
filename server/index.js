@@ -136,6 +136,69 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
+// SeatGeek API proxy (CORS not supported by SeatGeek, so we proxy through server)
+app.get('/api/seatgeek/status', (req, res) => {
+  res.json({ available: !!process.env.SEATGEEK_CLIENT_ID });
+});
+
+app.get('/api/seatgeek/events', async (req, res) => {
+  if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
+
+  const cacheKey = 'seatgeek_la_concerts';
+  const cached = db.prepare('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = ?').get(cacheKey);
+  if (cached && new Date(cached.expires_at) > new Date()) {
+    return res.json(JSON.parse(cached.response));
+  }
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const params = new URLSearchParams({
+      'lat': '34.0522',
+      'lon': '-118.2437',
+      'range': '30mi',
+      'taxonomies.name': 'concert',
+      'datetime_local.gte': today,
+      'datetime_local.lte': future,
+      'per_page': '50',
+      'sort': 'datetime_local.asc',
+      'client_id': process.env.SEATGEEK_CLIENT_ID,
+    });
+
+    const response = await fetch(`https://api.seatgeek.com/2/events?${params}`);
+    if (!response.ok) throw new Error(`SeatGeek API returned ${response.status}`);
+    const data = await response.json();
+
+    const events = (data.events || []).map(e => ({
+      id: e.id,
+      title: e.short_title || e.title,
+      artist: e.performers?.[0]?.name || e.title,
+      venue: e.venue?.name || '',
+      city: e.venue?.city || '',
+      state: e.venue?.state || '',
+      date: e.datetime_local ? e.datetime_local.split('T')[0] : null,
+      time: e.datetime_local ? e.datetime_local.split('T')[1]?.slice(0, 5) : null,
+      url: e.url,
+      image: e.performers?.[0]?.image || null,
+      lowest_price: e.stats?.lowest_price || null,
+      average_price: e.stats?.average_price || null,
+      listing_count: e.stats?.listing_count || 0,
+    }));
+
+    // Cache for 1 hour
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    db.prepare('INSERT OR REPLACE INTO seatgeek_cache (cache_key, response, expires_at) VALUES (?, ?, ?)')
+      .run(cacheKey, JSON.stringify(events), expiresAt);
+
+    res.json(events);
+  } catch (err) {
+    console.error('SeatGeek fetch error:', err);
+    // Return stale cache if available
+    if (cached) return res.json(JSON.parse(cached.response));
+    res.status(500).json({ error: 'Failed to fetch events: ' + err.message });
+  }
+});
+
 // AI ticket art generation
 const TICKET_STYLES = ['classic', 'punk', 'psychedelic', 'minimal', 'vintage', 'festival'];
 

@@ -60,6 +60,13 @@ db.exec(`
     expires_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS seatgeek_cache (
+    cache_key TEXT PRIMARY KEY,
+    response TEXT NOT NULL,
+    fetched_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS api_usage (
     date TEXT PRIMARY KEY,
     request_count INTEGER DEFAULT 0

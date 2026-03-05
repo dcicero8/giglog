@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import UpcomingCard from '../components/UpcomingCard'
+import OnDeckCard from '../components/OnDeckCard'
 import StarRating from '../components/StarRating'
 import Modal from '../components/Modal'
 
@@ -15,6 +16,34 @@ export default function Upcoming() {
   const [completeModal, setCompleteModal] = useState(null)
   const [completeRating, setCompleteRating] = useState(0)
   const [completeNotes, setCompleteNotes] = useState('')
+
+  // On Deck (SeatGeek)
+  const [seatgeekAvailable, setSeatgeekAvailable] = useState(false)
+  const [onDeckEvents, setOnDeckEvents] = useState([])
+  const [onDeckLoading, setOnDeckLoading] = useState(true)
+  const [onDeckError, setOnDeckError] = useState(null)
+
+  useEffect(() => {
+    const fetchSeatGeek = async () => {
+      try {
+        const status = await api.get('/seatgeek/status')
+        if (!status.available) {
+          setSeatgeekAvailable(false)
+          setOnDeckLoading(false)
+          return
+        }
+        setSeatgeekAvailable(true)
+        const events = await api.get('/seatgeek/events')
+        setOnDeckEvents(events)
+      } catch (err) {
+        console.error('SeatGeek fetch error:', err)
+        setOnDeckError(err.message)
+      } finally {
+        setOnDeckLoading(false)
+      }
+    }
+    fetchSeatGeek()
+  }, [])
 
   const openAdd = () => {
     setForm(emptyForm)
@@ -73,6 +102,26 @@ export default function Upcoming() {
     refetch()
   }
 
+  const handleSaveOnDeck = async (event) => {
+    try {
+      await api.post('/upcoming', {
+        artist: event.artist,
+        venue: event.venue,
+        city: event.city,
+        date: event.date,
+        price: event.lowest_price || null,
+        section: '',
+        last_minute: true,
+        notes: `Via SeatGeek · ${event.listing_count || 0} listings available`,
+      })
+      refetch()
+      // Remove from on deck list so user sees it moved
+      setOnDeckEvents(prev => prev.filter(e => e.id !== event.id))
+    } catch (err) {
+      alert('Failed to save: ' + err.message)
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -85,29 +134,92 @@ export default function Upcoming() {
         </button>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="bg-bg-card border border-border rounded-xl p-5 animate-pulse h-48" />
-          ))}
-        </div>
-      ) : !shows?.length ? (
-        <div className="text-center py-16">
-          <p className="text-text-muted text-lg mb-2">No shows on the horizon</p>
-          <p className="text-text-dim text-sm">Check your wishlist for artists to see!</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {shows.map(show => (
-            <UpcomingCard
-              key={show.id}
-              show={show}
-              onComplete={openComplete}
-              onEdit={openEdit}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
+      {/* ═══ MY TICKETS ═══ */}
+      <div className="mb-8">
+        <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
+          <span className="text-accent">🎫</span> My Tickets
+        </h2>
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-bg-card border border-border rounded-xl p-5 animate-pulse h-48" />
+            ))}
+          </div>
+        ) : !shows?.length ? (
+          <div className="text-center py-10 bg-bg-card/30 border border-border/40 rounded-xl">
+            <p className="text-text-muted text-base mb-1">No tickets yet</p>
+            <p className="text-text-dim text-sm">Add a show or save one from On Deck below!</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {shows.map(show => (
+              <UpcomingCard
+                key={show.id}
+                show={show}
+                onComplete={openComplete}
+                onEdit={openEdit}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ DIVIDER ═══ */}
+      {seatgeekAvailable && (
+        <>
+          <div className="relative my-8">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border/60" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-bg px-4 text-xs font-semibold text-text-dim uppercase tracking-widest">
+                Scouting
+              </span>
+            </div>
+          </div>
+
+          {/* ═══ ON DECK ═══ */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider flex items-center gap-2">
+                <span className="text-warning">🎯</span> On Deck
+                <span className="text-text-dim font-normal normal-case tracking-normal">· LA Area · Next 30 Days</span>
+              </h2>
+              {onDeckEvents.length > 0 && (
+                <span className="text-xs text-text-dim">{onDeckEvents.length} shows</span>
+              )}
+            </div>
+
+            {onDeckLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="bg-bg-card/50 border border-border/60 rounded-xl animate-pulse h-40" />
+                ))}
+              </div>
+            ) : onDeckError ? (
+              <div className="text-center py-10 bg-bg-card/30 border border-border/40 rounded-xl">
+                <p className="text-text-muted text-sm">Couldn't load SeatGeek events</p>
+                <p className="text-text-dim text-xs mt-1">{onDeckError}</p>
+              </div>
+            ) : onDeckEvents.length === 0 ? (
+              <div className="text-center py-10 bg-bg-card/30 border border-border/40 rounded-xl">
+                <p className="text-text-muted text-sm">No concerts found in the LA area for the next 30 days</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {onDeckEvents.map(event => (
+                  <OnDeckCard
+                    key={event.id}
+                    event={event}
+                    onSave={handleSaveOnDeck}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Add/Edit Modal */}
