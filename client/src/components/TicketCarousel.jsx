@@ -37,9 +37,9 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
     )
   }
 
-  // ── Cylindrical 3D carousel with coverflow styling ──
-  // Radius so cards wrap around a cylinder — scales with count
-  const radius = Math.max(400, count * 50)
+  // ── Cylindrical 3D carousel ──
+  // Keep radius small relative to perspective so front card isn't blown up
+  const radius = Math.max(280, count * 28)
   const anglePerCard = 360 / count
 
   const getStyle = (index) => {
@@ -52,18 +52,16 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
     const cosAngle = Math.cos(angleRad)
     const absOffset = Math.abs(offset)
 
-    // Hide cards that are behind the cylinder
-    if (cosAngle < -0.3) {
+    // Hide cards behind the cylinder
+    if (cosAngle < -0.2) {
       return { opacity: 0, pointerEvents: 'none', visibility: 'hidden' }
     }
 
-    // Cylindrical transform: rotate around Y axis, then push out along Z
-    const scale = absOffset === 0 ? 1.08 : 0.85 + cosAngle * 0.15
-    const opacity = absOffset === 0 ? 1 : Math.max(0.2, 0.3 + cosAngle * 0.7)
+    const opacity = absOffset === 0 ? 1 : Math.max(0.15, (cosAngle + 0.2) / 1.2)
     const brightness = absOffset === 0 ? 1 : Math.max(0.45, 0.4 + cosAngle * 0.6)
 
     return {
-      transform: `rotateY(${angle}deg) translateZ(${radius}px) scale(${scale})`,
+      transform: `rotateY(${angle}deg) translateZ(${radius}px)`,
       zIndex: Math.round(100 + cosAngle * 100),
       opacity,
       filter: absOffset === 0 ? 'none' : `brightness(${brightness})`,
@@ -77,7 +75,7 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
       {/* 3D cylindrical scene */}
       <div
         className="relative flex items-center justify-center overflow-hidden"
-        style={{ perspective: 900, perspectiveOrigin: '50% 45%', height: 260 }}
+        style={{ perspective: 1200, perspectiveOrigin: '50% 45%', height: 240 }}
       >
         {/* Reflective shelf beneath */}
         <div
