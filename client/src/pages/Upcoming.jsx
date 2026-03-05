@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import UpcomingCard from '../components/UpcomingCard'
@@ -10,12 +10,17 @@ const emptyForm = { artist: '', venue: '', city: '', date: '', price: '', sectio
 
 export default function Upcoming() {
   const { data: shows, loading, refetch } = useApi('/upcoming')
+  const { data: aiStatus } = useApi('/ai-status')
+  const aiAvailable = aiStatus?.available ?? false
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState(null)
   const [completeModal, setCompleteModal] = useState(null)
   const [completeRating, setCompleteRating] = useState(0)
   const [completeNotes, setCompleteNotes] = useState('')
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState(null)
+  const scanFileRef = useRef(null)
 
   // On Deck (SeatGeek)
   const [seatgeekAvailable, setSeatgeekAvailable] = useState(false)
@@ -148,19 +153,79 @@ export default function Upcoming() {
     }
   }
 
+  const handleScanTicket = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setScanLoading(true)
+    setScanError(null)
+    try {
+      const formData = new FormData()
+      formData.append('ticket', file)
+      const res = await fetch('/api/parse-ticket', { method: 'POST', body: formData })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to parse ticket')
+      }
+      const parsed = await res.json()
+      setForm({
+        ...emptyForm,
+        artist: parsed.artist || '',
+        venue: parsed.venue || '',
+        city: parsed.city || '',
+        date: parsed.date || '',
+        price: parsed.price || '',
+        section: parsed.section || '',
+        notes: parsed.notes || '',
+      })
+      setEditId(null)
+      setModalOpen(true)
+    } catch (err) {
+      setScanError(err.message)
+    } finally {
+      setScanLoading(false)
+      if (scanFileRef.current) scanFileRef.current.value = ''
+    }
+  }
+
   const visibleOnDeck = onDeckEvents.filter(e => !dismissedArtists.has(e.artist))
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-heading font-bold text-text">Upcoming Shows</h1>
-        <button
-          onClick={openAdd}
-          className="px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer"
-        >
-          + Add Show
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={scanFileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleScanTicket}
+            className="hidden"
+          />
+          {aiAvailable && (
+            <button
+              onClick={() => scanFileRef.current?.click()}
+              disabled={scanLoading}
+              className="px-4 py-2 text-sm font-semibold rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {scanLoading ? 'Scanning...' : '📸 Scan Ticket'}
+            </button>
+          )}
+          <button
+            onClick={openAdd}
+            className="px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer"
+          >
+            + Add Show
+          </button>
+        </div>
       </div>
+
+      {/* Scan error */}
+      {scanError && (
+        <div className="mb-4 p-3 bg-accent/10 border border-accent/20 rounded-lg flex items-center justify-between">
+          <span className="text-sm text-accent">{scanError}</span>
+          <button onClick={() => setScanError(null)} className="text-xs text-text-dim hover:text-text bg-transparent border-0 cursor-pointer">Dismiss</button>
+        </div>
+      )}
 
       {/* ═══ MY TICKETS ═══ */}
       <div className="mb-8">

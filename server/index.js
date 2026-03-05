@@ -222,6 +222,86 @@ app.delete('/api/dismissed-artists/:artist', (req, res) => {
   res.json(rows.map(r => r.artist));
 });
 
+// Parse ticket image with Gemini Vision
+app.post('/api/parse-ticket', ticketUpload.single('ticket'), async (req, res) => {
+  if (!process.env.GEMINI_API_KEY) return res.status(400).json({ error: 'GEMINI_API_KEY not configured' });
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+
+  try {
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const base64Image = imageBuffer.toString('base64');
+    const mimeType = req.file.mimetype || 'image/jpeg';
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inlineData: {
+                  mimeType,
+                  data: base64Image,
+                },
+              },
+              {
+                text: `Analyze this concert ticket image and extract the following information. Return ONLY a JSON object with these fields (use null for any field you can't determine):
+
+{
+  "artist": "performer/band name",
+  "venue": "venue name",
+  "city": "city, state",
+  "date": "YYYY-MM-DD format",
+  "price": numeric price or null,
+  "section": "section, row, seat info or null",
+  "notes": "any other notable info from the ticket"
+}
+
+Return ONLY the JSON, no markdown, no explanation.`,
+              },
+            ],
+          }],
+          generationConfig: { maxOutputTokens: 1000 },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `Gemini API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Extract JSON from response (handle markdown code blocks)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Could not parse AI response');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Clean up the temp file
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      artist: parsed.artist || '',
+      venue: parsed.venue || '',
+      city: parsed.city || '',
+      date: parsed.date || '',
+      price: parsed.price || '',
+      section: parsed.section || '',
+      notes: parsed.notes || '',
+    });
+  } catch (err) {
+    // Clean up temp file on error
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    console.error('Ticket parse error:', err);
+    res.status(500).json({ error: 'Failed to parse ticket: ' + err.message });
+  }
+});
+
 // AI ticket art generation
 const TICKET_STYLES = ['classic', 'punk', 'psychedelic', 'minimal', 'vintage', 'festival'];
 
