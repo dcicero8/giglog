@@ -344,7 +344,7 @@ Return ONLY the JSON, no markdown, no explanation.`,
 });
 
 // Ticket art generation (programmatic SVG — no AI needed)
-const TICKET_STYLES = ['blue', 'gold', 'red', 'green', 'pink', 'orange', 'random'];
+const TICKET_STYLES = ['blue', 'gold', 'red', 'green', 'purple', 'teal', 'random'];
 
 app.post('/api/concerts/:id/generate-ticket', (req, res) => {
   const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
@@ -497,9 +497,9 @@ function generateTicketArt(concert, style) {
   const dateObj = concert.date ? new Date(concert.date + 'T00:00:00') : null;
   const dayOfWeek = dateObj ? dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : '';
   const monthStr = dateObj ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase() : '';
-  const year = dateObj ? String(dateObj.getFullYear()).slice(-2) : '';
-  const dateCompact = dateObj ? `${dateObj.getDate()}${dateObj.toLocaleDateString('en-US',{month:'short'}).toUpperCase()}${year}` : '';
-  const fullDate = dateObj ? `${dayOfWeek} ${monthStr} ${dateObj.getFullYear()}  7:30PM` : 'DATE TBD';
+  const year = dateObj ? dateObj.getFullYear() : '';
+  const fullDate = dateObj ? `${dayOfWeek} ${monthStr} ${year}` : 'DATE TBD';
+  const timeStr = '7:30PM';
 
   const section = concert.section || concert.notes?.match(/sec(?:tion)?\s*(\w+)/i)?.[1] || '';
   const row = concert.notes?.match(/row\s*(\w+)/i)?.[1] || '';
@@ -507,24 +507,26 @@ function generateTicketArt(concert, style) {
 
   const rChar = () => String.fromCharCode(65 + Math.floor(Math.random() * 26));
   const rNum = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-  const eventId = `${rChar()}${rNum(10000,99999)}`;
-  const rowCode = row || `${rChar()}${rNum(1000,9999)}`;
-  const seatCode = seat || String(rNum(1,40));
-  const sectionCode = section || String(rNum(100,999));
+  const serialPrefix = `${rChar()}${rChar()}${rNum(0,9)}${rNum(0,9)}${rNum(0,9)}${rNum(0,9)}`;
+  const serialSuffix = `${rNum(10000,99999)}`;
+  const sectionCode = section || `${rNum(100,400)}`;
+  const rowCode = row || String(rNum(1, 30));
+  const seatCode = seat || String(rNum(1, 40));
   const price = concert.price ? `$${Number(concert.price).toFixed(2)}` : '$0.00';
-  const svcFee = concert.price ? `$${(Number(concert.price) * 0.15).toFixed(2)}` : '$0.00';
 
   const artist = (concert.artist || 'ARTIST').toUpperCase();
   const venue = (concert.venue || 'VENUE').toUpperCase();
   const city = (concert.city || '').toUpperCase();
+  const venueCity = [venue, city].filter(Boolean).join(', ');
 
+  // Scanned ticket color palettes — muted, aged tones
   const colorSchemes = {
-    blue:   { bg: '#E8EEF4', box: '#8BA4BD', boxText: '#fff', accent: '#4A6B8A', text: '#111', stubBg: '#DCE6F0', border: '#A0B8D0' },
-    gold:   { bg: '#F4EDE0', box: '#BDA06A', boxText: '#fff', accent: '#8B7030', text: '#1a1000', stubBg: '#EEE4D0', border: '#D0B878' },
-    red:    { bg: '#F4E4E0', box: '#BD6A6A', boxText: '#fff', accent: '#8A3030', text: '#1a0500', stubBg: '#F0D8D4', border: '#D08878' },
-    green:  { bg: '#E0F4E4', box: '#6ABD7A', boxText: '#fff', accent: '#2A6B3A', text: '#001a00', stubBg: '#D4F0D8', border: '#78D088' },
-    pink:   { bg: '#F4E0EC', box: '#BD6AA0', boxText: '#fff', accent: '#7A2860', text: '#1a0010', stubBg: '#F0D4E4', border: '#D088B8' },
-    orange: { bg: '#F4ECE0', box: '#BD8A5A', boxText: '#fff', accent: '#8A5020', text: '#1a0E00', stubBg: '#F0E0D0', border: '#D0A068' },
+    blue:   { paper: '#d8dfe8', ink: '#1a2844', accent: '#3b5998', faded: '#6b82a8', stripe: '#9ab0cc', boxBg: '#aec3db' },
+    gold:   { paper: '#e8dfc8', ink: '#2a1f00', accent: '#8b6914', faded: '#a08850', stripe: '#c8b878', boxBg: '#d4c490' },
+    red:    { paper: '#e8d4d0', ink: '#2a0800', accent: '#8b2014', faded: '#a06050', stripe: '#cc9088', boxBg: '#d4a8a0' },
+    green:  { paper: '#d0e0d4', ink: '#002a08', accent: '#1a6b28', faded: '#508a60', stripe: '#88b890', boxBg: '#a0c8a8' },
+    purple: { paper: '#dcd0e4', ink: '#1a0028', accent: '#5a2888', faded: '#806898', stripe: '#a890c0', boxBg: '#b8a0cc' },
+    teal:   { paper: '#cce0e4', ink: '#002028', accent: '#145868', faded: '#508888', stripe: '#80b0b8', boxBg: '#98c4cc' },
   };
 
   const styleKeys = Object.keys(colorSchemes);
@@ -533,82 +535,131 @@ function generateTicketArt(concert, style) {
 
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  // Vertical barcode for stub
-  let vBarcode = '';
-  let by = 0;
-  for (let i = 0; i < 50; i++) {
-    const h = [1, 1.5, 2, 2.5][rNum(0,3)];
-    if (i % 2 === 0) vBarcode += `<rect x="0" y="${by}" width="16" height="${h}" fill="#222"/>`;
-    by += h + [0.4, 0.6, 0.8][rNum(0,2)];
+  // Horizontal barcode
+  let barcode = '';
+  let bx = 0;
+  for (let i = 0; i < 55; i++) {
+    const w = [1, 1.5, 2, 2.5, 3][rNum(0,4)];
+    if (i % 2 === 0) barcode += `<rect x="${bx}" y="0" width="${w}" height="28" fill="${c.ink}" opacity="0.8"/>`;
+    bx += w + [0.5, 0.8, 1.2][rNum(0,2)];
   }
 
-  const artistSize = artist.length > 32 ? 16 : artist.length > 24 ? 19 : artist.length > 18 ? 22 : 26;
+  // Random seed for noise filter
+  const noiseSeed = rNum(1, 9999);
+  const grainSeed = rNum(1, 9999);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 220">
+  // Subtle random rotation for scanned feel (-0.3 to 0.3 deg)
+  const rot = (rNum(-3, 3) / 10).toFixed(1);
+
+  const artistSize = artist.length > 30 ? 20 : artist.length > 22 ? 24 : artist.length > 16 ? 28 : 34;
+
+  // Stain positions (random coffee ring / water mark positions)
+  const stainX = rNum(80, 440);
+  const stainY = rNum(40, 160);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 200">
   <defs>
+    <!-- Paper grain texture -->
+    <filter id="grain" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" seed="${grainSeed}" result="noise"/>
+      <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
+      <feBlend in="SourceGraphic" in2="grayNoise" mode="multiply" result="grained"/>
+      <feComponentTransfer in="grained">
+        <feFuncA type="linear" slope="1"/>
+      </feComponentTransfer>
+    </filter>
+    <!-- Aged yellowing overlay -->
+    <filter id="age">
+      <feColorMatrix type="matrix" values="1.02 0.05 0 0 0.02
+                                            0 1.0 0 0 0.01
+                                            0 0 0.92 0 -0.01
+                                            0 0 0 1 0"/>
+    </filter>
+    <!-- Slight blur for scanned feel -->
+    <filter id="scanned">
+      <feGaussianBlur stdDeviation="0.3"/>
+    </filter>
     <style>
-      .t-bold { font-family: 'Arial Black', 'Impact', Arial, sans-serif; font-weight: 900; }
-      .t-body { font-family: 'Arial Narrow', Arial, sans-serif; font-weight: 700; }
-      .t-mono { font-family: 'Courier New', monospace; font-weight: 700; }
+      .tk-bold { font-family: 'Arial Black', 'Impact', Arial, sans-serif; font-weight: 900; }
+      .tk-body { font-family: 'Arial Narrow', Arial, sans-serif; font-weight: 700; }
+      .tk-mono { font-family: 'Courier New', monospace; font-weight: 700; }
     </style>
   </defs>
 
-  <!-- Background -->
-  <rect width="600" height="220" rx="4" fill="${c.bg}" stroke="${c.border}" stroke-width="1"/>
+  <!-- Scanner background (dark edges) -->
+  <rect width="520" height="200" fill="#0a0a0a"/>
 
-  <!-- LEFT INFO COLUMN -->
-  <text x="36" y="14" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">SECTION</text>
-  <rect x="8" y="17" width="56" height="20" rx="2" fill="${c.box}"/>
-  <text x="36" y="32" text-anchor="middle" class="t-bold" font-size="11" fill="${c.boxText}">${esc(sectionCode)}</text>
+  <!-- Ticket body with slight rotation -->
+  <g transform="rotate(${rot}, 260, 100)" filter="url(#age)">
+    <!-- Paper base -->
+    <rect x="6" y="6" width="508" height="188" rx="2" fill="${c.paper}"/>
 
-  <text x="36" y="49" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">ROW</text>
-  <rect x="8" y="52" width="56" height="20" rx="2" fill="${c.box}"/>
-  <text x="36" y="67" text-anchor="middle" class="t-bold" font-size="11" fill="${c.boxText}">${esc(rowCode)}</text>
+    <!-- Paper grain overlay -->
+    <rect x="6" y="6" width="508" height="188" rx="2" filter="url(#grain)" opacity="0.12"/>
 
-  <text x="36" y="84" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">SEAT</text>
-  <rect x="8" y="87" width="56" height="20" rx="2" fill="${c.box}"/>
-  <text x="36" y="102" text-anchor="middle" class="t-bold" font-size="11" fill="${c.boxText}">${esc(seatCode)}</text>
+    <!-- Subtle age stain -->
+    <circle cx="${stainX}" cy="${stainY}" r="${rNum(25,50)}" fill="#c8a860" opacity="0.06"/>
+    <circle cx="${stainX + rNum(-10,10)}" cy="${stainY + rNum(-10,10)}" r="${rNum(15,30)}" fill="#b89848" opacity="0.04"/>
 
-  <text x="36" y="120" text-anchor="middle" class="t-mono" font-size="7" fill="${c.accent}">${dateCompact}</text>
+    <!-- Top accent stripe -->
+    <rect x="6" y="6" width="508" height="6" fill="${c.stripe}" opacity="0.7"/>
+    <rect x="6" y="12" width="508" height="2" fill="${c.accent}" opacity="0.4"/>
 
-  <text x="36" y="136" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">PRICE</text>
-  <rect x="8" y="139" width="56" height="16" rx="2" fill="${c.box}"/>
-  <text x="36" y="151" text-anchor="middle" class="t-bold" font-size="9" fill="${c.boxText}">${esc(price)}</text>
+    <!-- Ticket content (slightly blurred for scan feel) -->
+    <g filter="url(#scanned)">
 
-  <text x="36" y="168" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">SVC FEE</text>
-  <text x="36" y="178" text-anchor="middle" class="t-mono" font-size="8" fill="${c.text}">${esc(svcFee)}</text>
+      <!-- Top row: serial + event info -->
+      <text x="16" y="30" class="tk-mono" font-size="7" fill="${c.faded}" letter-spacing="1">${esc(serialPrefix)}</text>
+      <text x="260" y="30" text-anchor="middle" class="tk-body" font-size="7" fill="${c.faded}" letter-spacing="3">TICKETMASTER</text>
+      <text x="504" y="30" text-anchor="end" class="tk-mono" font-size="7" fill="${c.faded}" letter-spacing="1">${esc(serialSuffix)}</text>
 
-  <!-- CENTER EVENT INFO -->
-  <text x="270" y="20" text-anchor="middle" class="t-body" font-size="8" fill="${c.accent}" letter-spacing="3">TICKETMASTER</text>
-  <text x="270" y="48" text-anchor="middle" class="t-bold" font-size="${artistSize}" fill="${c.text}" letter-spacing="1">${esc(artist.length > 36 ? artist.substring(0,34)+'..' : artist)}</text>
-  <text x="270" y="70" text-anchor="middle" class="t-bold" font-size="11" fill="${c.text}">${esc(venue.length > 34 ? venue.substring(0,32)+'..' : venue)}</text>
-  ${city ? `<text x="270" y="84" text-anchor="middle" class="t-body" font-size="10" fill="${c.accent}">${esc(city)}</text>` : ''}
-  <text x="270" y="108" text-anchor="middle" class="t-bold" font-size="13" fill="${c.text}">${esc(fullDate)}</text>
-  <text x="270" y="126" text-anchor="middle" class="t-body" font-size="8" fill="${c.accent}">NO REFUNDS / EXCHANGES</text>
+      <!-- MAIN: Venue + City line -->
+      <text x="260" y="56" text-anchor="middle" class="tk-bold" font-size="12" fill="${c.ink}" letter-spacing="1">${esc(venueCity.length > 50 ? venueCity.substring(0,48)+'..' : venueCity)}</text>
 
-  <!-- PERFORATED LINE -->
-  <line x1="445" y1="3" x2="445" y2="195" stroke="${c.accent}" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+      <!-- Divider line -->
+      <line x1="40" y1="64" x2="480" y2="64" stroke="${c.faded}" stroke-width="0.5" opacity="0.5"/>
 
-  <!-- RIGHT STUB -->
-  <rect x="448" y="1" width="151" height="196" rx="3" fill="${c.stubBg}"/>
-  <rect x="456" y="8" width="52" height="16" rx="2" fill="${c.box}"/>
-  <text x="482" y="20" text-anchor="middle" class="t-bold" font-size="8" fill="${c.boxText}">${esc(eventId)}</text>
-  <rect x="456" y="30" width="52" height="16" rx="2" fill="${c.box}"/>
-  <text x="482" y="42" text-anchor="middle" class="t-bold" font-size="8" fill="${c.boxText}">${esc(rowCode)}</text>
-  <text x="456" y="58" class="t-body" font-size="6" fill="${c.accent}">SECTION</text>
-  <rect x="456" y="60" width="52" height="16" rx="2" fill="${c.box}"/>
-  <text x="482" y="72" text-anchor="middle" class="t-bold" font-size="8" fill="${c.boxText}">${esc(sectionCode)}</text>
-  <text x="456" y="90" class="t-mono" font-size="7" fill="${c.text}">${dateCompact}</text>
-  <text x="456" y="104" class="t-body" font-size="7" fill="${c.accent}">GEN ADM</text>
-  <text x="456" y="118" class="t-mono" font-size="7" fill="${c.text}">${esc(price)}</text>
-  <g transform="translate(520, 8)">${vBarcode}</g>
-  <text transform="translate(548,100) rotate(90)" class="t-body" font-size="7" fill="${c.accent}" opacity="0.5">${esc(eventId)} ${esc(sectionCode)}</text>
+      <!-- ARTIST NAME — big and bold -->
+      <text x="260" y="${artistSize > 28 ? 97 : 95}" text-anchor="middle" class="tk-bold" font-size="${artistSize}" fill="${c.ink}" letter-spacing="2">${esc(artist.length > 34 ? artist.substring(0,32)+'..' : artist)}</text>
 
-  <!-- BOTTOM STRIP -->
-  <rect x="1" y="197" width="598" height="22" rx="0" fill="${c.box}" opacity="0.15"/>
-  <text x="12" y="212" class="t-mono" font-size="7" fill="${c.text}">${esc(eventId)}  ${esc(sectionCode)}  ${esc(rowCode)}  ${esc(seatCode)}</text>
-  <text x="270" y="212" text-anchor="middle" class="t-body" font-size="7" fill="${c.accent}">NO PHOTOGRAPHY</text>
-  <text x="588" y="212" text-anchor="end" class="t-mono" font-size="7" fill="${c.text}">${esc(price)}</text>
+      <!-- Date and time line -->
+      <text x="260" y="120" text-anchor="middle" class="tk-bold" font-size="14" fill="${c.ink}">${esc(fullDate)}  ${timeStr}</text>
+
+      <!-- Bottom info row: section/row/seat/price -->
+      <line x1="16" y1="134" x2="504" y2="134" stroke="${c.faded}" stroke-width="0.5" opacity="0.5"/>
+
+      <!-- Info boxes -->
+      <text x="50" y="148" text-anchor="middle" class="tk-body" font-size="6" fill="${c.faded}">SECTION</text>
+      <rect x="20" y="151" width="60" height="18" rx="1" fill="${c.boxBg}" opacity="0.5"/>
+      <text x="50" y="164" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(sectionCode)}</text>
+
+      <text x="145" y="148" text-anchor="middle" class="tk-body" font-size="6" fill="${c.faded}">ROW</text>
+      <rect x="115" y="151" width="60" height="18" rx="1" fill="${c.boxBg}" opacity="0.5"/>
+      <text x="145" y="164" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(rowCode)}</text>
+
+      <text x="240" y="148" text-anchor="middle" class="tk-body" font-size="6" fill="${c.faded}">SEAT</text>
+      <rect x="210" y="151" width="60" height="18" rx="1" fill="${c.boxBg}" opacity="0.5"/>
+      <text x="240" y="164" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(seatCode)}</text>
+
+      <text x="340" y="148" text-anchor="middle" class="tk-body" font-size="6" fill="${c.faded}">PRICE</text>
+      <rect x="305" y="151" width="70" height="18" rx="1" fill="${c.boxBg}" opacity="0.5"/>
+      <text x="340" y="164" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(price)}</text>
+
+      <text x="440" y="148" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">NO REFUNDS / EXCHANGES</text>
+      <text x="440" y="164" text-anchor="middle" class="tk-mono" font-size="6" fill="${c.faded}">GEN ADMISSION</text>
+
+    </g>
+
+    <!-- Barcode at bottom -->
+    <g transform="translate(140, 174)">${barcode}</g>
+    <text x="260" y="196" text-anchor="middle" class="tk-mono" font-size="5" fill="${c.faded}">${esc(serialPrefix)} ${esc(sectionCode)} ${esc(rowCode)} ${esc(seatCode)} ${esc(serialSuffix)}</text>
+
+    <!-- Edge wear — subtle dark corners -->
+    <rect x="6" y="6" width="12" height="12" fill="#000" opacity="0.03" rx="1"/>
+    <rect x="502" y="6" width="12" height="12" fill="#000" opacity="0.02" rx="1"/>
+    <rect x="6" y="182" width="12" height="12" fill="#000" opacity="0.04" rx="1"/>
+    <rect x="502" y="182" width="12" height="12" fill="#000" opacity="0.03" rx="1"/>
+  </g>
 </svg>`;
 }
 
