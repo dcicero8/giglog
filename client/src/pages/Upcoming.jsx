@@ -278,7 +278,7 @@ export default function Upcoming() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider flex items-center gap-2">
                 <span className="text-warning">🎯</span> On Deck
-                <span className="text-text-dim font-normal normal-case tracking-normal">· LA Area · Next 30 Days</span>
+                <span className="text-text-dim font-normal normal-case tracking-normal">· LA Area · Next 60 Days</span>
               </h2>
               <div className="flex items-center gap-3">
                 {dismissedArtists.size > 0 && (

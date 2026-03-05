@@ -666,8 +666,8 @@ function generateTicketArt(concert, style) {
 // Tickets endpoint (combined concerts + upcoming for carousel)
 // Exclude festival children — show ONE ticket per festival (the parent)
 app.get('/api/tickets', (req, res) => {
-  const concerts = db.prepare(`SELECT id, artist, venue, city, date, price, rating, last_minute, ticket_art_svg, ticket_image, 'past' as type FROM concerts WHERE parent_concert_id IS NULL ORDER BY date DESC`).all();
-  const upcomingShows = db.prepare(`SELECT id, artist, venue, city, date, price, NULL as rating, last_minute, ticket_art_svg, ticket_image, 'upcoming' as type FROM upcoming ORDER BY date ASC`).all();
+  const concerts = db.prepare(`SELECT id, artist, venue, city, date, price, rating, last_minute, ticket_art_svg, ticket_image, poster_image, 'past' as type FROM concerts WHERE parent_concert_id IS NULL ORDER BY date DESC`).all();
+  const upcomingShows = db.prepare(`SELECT id, artist, venue, city, date, price, NULL as rating, last_minute, ticket_art_svg, ticket_image, poster_image, 'upcoming' as type FROM upcoming ORDER BY date ASC`).all();
   const all = [...upcomingShows, ...concerts];
   res.json(all);
 });
