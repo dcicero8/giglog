@@ -186,21 +186,15 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
         {/* Band name + tour */}
         <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-          {child.setlist_fm_id ? (
-            <button
-              onClick={() => onViewBandSetlist?.(activeBandId === child.id ? null : child)}
-              className={`text-left text-sm transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium ${
-                activeBandId === child.id ? 'text-accent' : 'text-text hover:text-accent'
-              }`}
-              title={activeBandId === child.id ? 'Hide setlist' : 'View setlist'}
-            >
-              {child.artist}
-            </button>
-          ) : (
-            <span className="text-left text-sm text-text p-0 truncate font-medium">
-              {child.artist}
-            </span>
-          )}
+          <button
+            onClick={() => onViewBandSetlist?.(activeBandId === child.id ? null : child)}
+            className={`text-left text-sm transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium ${
+              activeBandId === child.id ? 'text-accent' : 'text-text hover:text-accent'
+            }`}
+            title={activeBandId === child.id ? 'Hide setlist' : child.setlist_fm_id ? 'View setlist' : 'Search for setlist'}
+          >
+            {child.artist}
+          </button>
           {child.tour_name && (
             <span className="text-[10px] text-text-dim/60 italic shrink-0 whitespace-nowrap">
               {child.tour_name}
@@ -208,21 +202,22 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
           )}
         </div>
 
-        {/* Setlist indicator */}
-        {child.setlist_fm_id ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onViewBandSetlist?.(activeBandId === child.id ? null : child) }}
-            className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 border-0 cursor-pointer transition-colors font-medium ${
-              activeBandId === child.id
+        {/* Setlist indicator — always clickable to view or search */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onViewBandSetlist?.(activeBandId === child.id ? null : child) }}
+          className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 border-0 cursor-pointer transition-colors font-medium ${
+            child.setlist_fm_id
+              ? activeBandId === child.id
                 ? 'text-success bg-success/30 ring-1 ring-success/40'
                 : 'text-success bg-success/10 hover:bg-success/20'
-            }`}
-          >
-            setlist
-          </button>
-        ) : (
-          <span className="text-[10px] text-text-dim/40 px-1.5 py-0.5 rounded-full bg-white/5 shrink-0">setlist</span>
-        )}
+              : activeBandId === child.id
+                ? 'text-text-muted bg-white/10 ring-1 ring-white/20'
+                : 'text-text-dim/40 bg-white/5 hover:bg-white/10 hover:text-text-muted'
+          }`}
+          title={child.setlist_fm_id ? 'View setlist' : 'Search for setlist'}
+        >
+          setlist
+        </button>
 
         {/* Quick links - visible on hover */}
         <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
