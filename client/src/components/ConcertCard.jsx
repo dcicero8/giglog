@@ -323,9 +323,14 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
       )}
 
       {/* Inline setlist for cards without ticket art (no flip available) */}
-      {setlistOpen && !(concert.ticket_image || concert.ticket_art_svg) && (
-        <div className="mb-3 rounded-lg bg-[#f5f0e6] border border-[#d4c9a8] p-4">
-          <SetlistBack concert={concert} />
+      {!(concert.ticket_image || concert.ticket_art_svg) && (
+        <div
+          className="mb-3 rounded-lg bg-[#f5f0e6] border border-[#d4c9a8] overflow-hidden transition-all duration-500 ease-in-out"
+          style={{ maxHeight: setlistOpen ? '400px' : '0px', opacity: setlistOpen ? 1 : 0, borderWidth: setlistOpen ? '1px' : '0px' }}
+        >
+          <div className="p-4 overflow-y-auto" style={{ maxHeight: '384px' }}>
+            {setlistOpen && <SetlistBack concert={concert} />}
+          </div>
         </div>
       )}
 
