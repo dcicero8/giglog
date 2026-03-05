@@ -4,7 +4,6 @@ import { useApi } from '../hooks/useApi'
 import { useSetlistImport } from '../hooks/useSetlistImport'
 import ConcertCard from '../components/ConcertCard'
 import FestivalCard from '../components/FestivalCard'
-import SetlistViewer from '../components/SetlistViewer'
 import SetlistUrlInput from '../components/SetlistUrlInput'
 import StarRating from '../components/StarRating'
 import Modal from '../components/Modal'
@@ -22,7 +21,6 @@ export default function Concerts() {
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState(null)
   const [setlistConcert, setSetlistConcert] = useState(null)
-  const [festivalBandSetlist, setFestivalBandSetlist] = useState(null) // { festivalId, child }
   const { data: aiStatus } = useApi('/ai-status')
   const aiAvailable = aiStatus?.available ?? false
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: setlistLoading, error: setlistError, setError: setSetlistError, importUrl, importFestival } = useSetlistImport()
@@ -126,11 +124,6 @@ export default function Concerts() {
     if (result) {
       setFestivalData(result)
     }
-  }
-
-  const handleSetlistLink = async (concertId, setlistFmId) => {
-    await api.put(`/concerts/${concertId}`, { setlist_fm_id: setlistFmId })
-    fetchConcerts()
   }
 
   const handleScanTicket = async (e) => {
@@ -280,52 +273,17 @@ export default function Concerts() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {concerts.map(concert => {
             const isSetlistOpen = setlistConcert?.id === concert.id
-            const isFestivalSetlistOpen = festivalBandSetlist?.festivalId === concert.id
             return (
-              <div
-                key={concert.id}
-                className={isFestivalSetlistOpen ? 'md:col-span-2 lg:col-span-2' : ''}
-              >
+              <div key={concert.id}>
                 {concert.children?.length > 0 ? (
-                  festivalBandSetlist?.festivalId === concert.id ? (
-                    <div className="flex gap-4 items-stretch">
-                      <div className="flex-1 min-w-0">
-                        <FestivalCard
-                          concert={concert}
-                          onEdit={openEdit}
-                          onDelete={handleDelete}
-                          aiAvailable={aiAvailable}
-                          onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
-                          onViewBandSetlist={(child) => {
-                            if (child) setFestivalBandSetlist({ festivalId: concert.id, child })
-                            else setFestivalBandSetlist(null)
-                          }}
-                          activeBandId={festivalBandSetlist?.child?.id}
-                          onAddDay={handleAddDay}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <SetlistViewer
-                          concert={festivalBandSetlist.child}
-                          onLink={(setlistFmId) => handleSetlistLink(festivalBandSetlist.child.id, setlistFmId)}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <FestivalCard
-                      concert={concert}
-                      onEdit={openEdit}
-                      onDelete={handleDelete}
-                      aiAvailable={aiAvailable}
-                      onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
-                      onViewBandSetlist={(child) => {
-                        if (child) setFestivalBandSetlist({ festivalId: concert.id, child })
-                        else setFestivalBandSetlist(null)
-                      }}
-                      activeBandId={null}
-                      onAddDay={handleAddDay}
-                    />
-                  )
+                  <FestivalCard
+                    concert={concert}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                    aiAvailable={aiAvailable}
+                    onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
+                    onAddDay={handleAddDay}
+                  />
                 ) : (
                   <ConcertCard
                     concert={concert}

@@ -2,12 +2,14 @@ import { useState, useRef, useMemo } from 'react'
 import { api } from '../lib/api'
 import { getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 import StarRating from './StarRating'
+import SetlistViewer from './SetlistViewer'
 
-export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onViewBandSetlist, activeBandId, onAddDay }) {
+export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onAddDay }) {
   const [expanded, setExpanded] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [posterUploading, setPosterUploading] = useState(false)
   const [reordering, setReordering] = useState(false)
+  const [activeBand, setActiveBand] = useState(null) // inline setlist
   const ticketFileRef = useRef(null)
   const posterFileRef = useRef(null)
 
@@ -150,7 +152,27 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
     const updatedChildren = children.map(c =>
       c.id === childId ? { ...c, setlist_fm_id: setlistFmId } : c
     )
+    // Update activeBand too so it reflects the new setlist_fm_id
+    if (activeBand?.id === childId) {
+      setActiveBand({ ...activeBand, setlist_fm_id: setlistFmId })
+    }
     onUpdate?.({ ...concert, children: updatedChildren })
+  }
+
+  const handleDeleteChild = async (child) => {
+    if (!window.confirm(`Remove ${child.artist} from this festival?`)) return
+    try {
+      await api.delete(`/concerts/${child.id}`)
+      const updatedChildren = children.filter(c => c.id !== child.id)
+      if (activeBand?.id === child.id) setActiveBand(null)
+      onUpdate?.({ ...concert, children: updatedChildren })
+    } catch (err) {
+      alert('Failed to remove: ' + err.message)
+    }
+  }
+
+  const toggleBandSetlist = (child) => {
+    setActiveBand(activeBand?.id === child.id ? null : child)
   }
 
   const formatDayHeader = (dateStr, dayNum) => {
@@ -187,11 +209,11 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
         {/* Band name + tour */}
         <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
           <button
-            onClick={() => onViewBandSetlist?.(activeBandId === child.id ? null : child)}
+            onClick={() => toggleBandSetlist(child)}
             className={`text-left text-sm transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium ${
-              activeBandId === child.id ? 'text-accent' : 'text-text hover:text-accent'
+              activeBand?.id === child.id ? 'text-accent' : 'text-text hover:text-accent'
             }`}
-            title={activeBandId === child.id ? 'Hide setlist' : child.setlist_fm_id ? 'View setlist' : 'Search for setlist'}
+            title={activeBand?.id === child.id ? 'Hide setlist' : child.setlist_fm_id ? 'View setlist' : 'Search for setlist'}
           >
             {child.artist}
           </button>
@@ -204,13 +226,13 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
         {/* Setlist indicator — always clickable to view or search */}
         <button
-          onClick={(e) => { e.stopPropagation(); onViewBandSetlist?.(activeBandId === child.id ? null : child) }}
+          onClick={(e) => { e.stopPropagation(); toggleBandSetlist(child) }}
           className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 border-0 cursor-pointer transition-colors font-medium ${
             child.setlist_fm_id
-              ? activeBandId === child.id
+              ? activeBand?.id === child.id
                 ? 'text-success bg-success/30 ring-1 ring-success/40'
                 : 'text-success bg-success/10 hover:bg-success/20'
-              : activeBandId === child.id
+              : activeBand?.id === child.id
                 ? 'text-text-muted bg-white/10 ring-1 ring-white/20'
                 : 'text-text-dim/40 bg-white/5 hover:bg-white/10 hover:text-text-muted'
           }`}
@@ -219,7 +241,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
           setlist
         </button>
 
-        {/* Quick links - visible on hover */}
+        {/* Quick links + delete - visible on hover */}
         <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <a
             href={getYouTubeExactShowUrl(child.artist, concert.venue, year)}
@@ -239,8 +261,25 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
           >
             ♫
           </a>
+          <button
+            onClick={() => handleDeleteChild(child)}
+            className="px-1.5 py-0.5 text-[10px] rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors border-0 cursor-pointer"
+            title={`Remove ${child.artist}`}
+          >
+            ✕
+          </button>
         </div>
       </div>
+
+      {/* Inline setlist viewer — expands below the band row */}
+      {activeBand?.id === child.id && (
+        <div className="mx-3 mb-2 mt-1">
+          <SetlistViewer
+            concert={child}
+            onLink={(setlistFmId) => handleSetlistLink(child.id, setlistFmId)}
+          />
+        </div>
+      )}
     </div>
   )
 
