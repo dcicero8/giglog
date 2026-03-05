@@ -576,15 +576,14 @@ function generateTicketArt(concert, style) {
   const venue = (concert.venue || 'VENUE').toUpperCase();
   const city = (concert.city || '').toUpperCase();
 
-  // Bold Ticketmaster-era color palettes
-  // stub/banner = bold color stock, main body = white/cream paper
+  // Color palettes — banner/accents use bold color, body is cream paper
   const colorSchemes = {
-    blue:   { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#5b8fbf', stockDk: '#3a6a9a', ink: '#0a1a30', inkLt: '#3a5068', accent: '#c8ddf0', faded: '#6888a8', band: '#d8e8f4', bandAlt: '#a0c8e8', stub: '#4a7eae', bannerText: '#c8ddf0' },
-    gold:   { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#c8a848', stockDk: '#a08830', ink: '#1a1400', inkLt: '#5a4a20', accent: '#f0e8c8', faded: '#8a7a38', band: '#f0e8c8', bandAlt: '#d8c878', stub: '#b09838', bannerText: '#f0e8c8' },
-    red:    { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#c85848', stockDk: '#a03828', ink: '#1a0800', inkLt: '#5a2818', accent: '#f0d8d4', faded: '#8a4838', band: '#f0d8d4', bandAlt: '#d89888', stub: '#b84838', bannerText: '#f0d8d4' },
-    green:  { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#58a068', stockDk: '#388048', ink: '#001a08', inkLt: '#184a28', accent: '#d4ecd8', faded: '#389048', band: '#d4ecd8', bandAlt: '#88c098', stub: '#489058', bannerText: '#d4ecd8' },
-    purple: { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#8868a8', stockDk: '#684888', ink: '#0a0018', inkLt: '#382858', accent: '#e0d4ec', faded: '#685888', band: '#e0d4ec', bandAlt: '#a088c0', stub: '#785898', bannerText: '#e0d4ec' },
-    teal:   { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#488898', stockDk: '#286878', ink: '#001820', inkLt: '#183848', accent: '#c8e0e8', faded: '#387888', band: '#c8e0e8', bandAlt: '#78b0c0', stub: '#387888', bannerText: '#c8e0e8' },
+    blue:   { paper: '#f2ede6', stock: '#5b8fbf', stockDk: '#3a6a9a', ink: '#0a1a30', inkLt: '#3a5068', faded: '#6888a8', bannerText: '#c8ddf0' },
+    gold:   { paper: '#f2ede6', stock: '#c8a848', stockDk: '#a08830', ink: '#1a1400', inkLt: '#5a4a20', faded: '#8a7a38', bannerText: '#f0e8c8' },
+    red:    { paper: '#f2ede6', stock: '#c85848', stockDk: '#a03828', ink: '#1a0800', inkLt: '#5a2818', faded: '#8a4838', bannerText: '#f0d8d4' },
+    green:  { paper: '#f2ede6', stock: '#58a068', stockDk: '#388048', ink: '#001a08', inkLt: '#184a28', faded: '#389048', bannerText: '#d4ecd8' },
+    purple: { paper: '#f2ede6', stock: '#8868a8', stockDk: '#684888', ink: '#0a0018', inkLt: '#382858', faded: '#685888', bannerText: '#e0d4ec' },
+    teal:   { paper: '#f2ede6', stock: '#488898', stockDk: '#286878', ink: '#001820', inkLt: '#183848', faded: '#387888', bannerText: '#c8e0e8' },
   };
 
   const styleKeys = Object.keys(colorSchemes);
@@ -593,72 +592,51 @@ function generateTicketArt(concert, style) {
 
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  // Horizontal barcode
+  // ── Ticket dimensions: 260×200 (half-width, like a torn stub keeper) ──
+  const W = 260, H = 200;
+  const pad = 5; // padding from scanner bed edge
+  const tW = W - pad * 2, tH = H - pad * 2; // ticket paper dimensions
+  const cx = W / 2; // center x
+
+  // Barcode (horizontal, compact)
   let barcode = '';
   let bx = 0;
-  for (let i = 0; i < 50; i++) {
-    const w = [1, 1.5, 2, 2.5, 3][rNum(0,4)];
-    if (i % 2 === 0) barcode += `<rect x="${bx}" y="0" width="${w}" height="16" fill="${c.ink}" opacity="0.75"/>`;
-    bx += w + [0.5, 0.8, 1.2][rNum(0,2)];
-  }
-
-  // Stub barcode (vertical, smaller)
-  let stubBarcode = '';
-  let sby = 0;
-  for (let i = 0; i < 30; i++) {
-    const h = [1, 1.5, 2][rNum(0,2)];
-    if (i % 2 === 0) stubBarcode += `<rect x="0" y="${sby}" width="40" height="${h}" fill="${c.ink}" opacity="0.6"/>`;
-    sby += h + [0.5, 0.8][rNum(0,1)];
+  for (let i = 0; i < 40; i++) {
+    const w = [1, 1.5, 2, 2.5][rNum(0,3)];
+    if (i % 2 === 0) barcode += `<rect x="${bx}" y="0" width="${w}" height="14" fill="${c.ink}" opacity="0.7"/>`;
+    bx += w + [0.5, 0.8, 1][rNum(0,2)];
   }
 
   const grainSeed = rNum(1, 9999);
-  const rot = (rNum(-5, 5) / 10).toFixed(1);
-  const stainX = rNum(150, 440);
-  const stainY = rNum(40, 160);
-  const stain2X = rNum(200, 480);
-  const stain2Y = rNum(20, 180);
-  const stain3X = rNum(130, 350);
-  const stain3Y = rNum(50, 170);
+  const rot = (rNum(-4, 4) / 10).toFixed(1);
   const ticketNum = `NTC${rNum(1000,9999)}${rNum(10000,99999)}`;
-  const foxingCount = rNum(3, 8); // small brown spots from aging
 
-  // Artist font size — scale down for long names
-  const artistSize = artist.length > 30 ? 18 : artist.length > 24 ? 22 : artist.length > 18 ? 26 : artist.length > 14 ? 30 : 36;
-
-  // Stub width
-  const stubW = 110;
-  const mainX = stubW + 8; // main body starts after stub + gap
-  const mainW = 520 - mainX - 6;
-  const mainCx = mainX + mainW / 2; // center x of main body
-
-  // Perforation circles
-  let perf = '';
-  for (let py = 10; py < 196; py += 5) {
-    perf += `<circle cx="${stubW + 6}" cy="${py}" r="1.5" fill="#0a0a0a"/>`;
+  // Torn left edge — jagged path where the stub was ripped off
+  let tornPath = `M ${pad} ${pad}`;
+  for (let y = pad; y < pad + tH; y += rNum(3, 7)) {
+    const jag = pad + rNum(-2, 4);
+    tornPath += ` L ${jag} ${Math.min(y + rNum(2, 6), pad + tH)}`;
   }
+  tornPath += ` L ${pad} ${pad + tH}`;
 
-  // Foxing spots (tiny brown dots that appear on old paper)
+  // Artist font size — scale for width
+  const artistSize = artist.length > 28 ? 14 : artist.length > 22 ? 17 : artist.length > 16 ? 20 : artist.length > 12 ? 24 : 28;
+
+  // Foxing spots
+  const foxingCount = rNum(2, 6);
   let foxing = '';
   for (let f = 0; f < foxingCount; f++) {
-    const fx = rNum(mainX + 10, mainX + mainW - 10);
-    const fy = rNum(20, 185);
-    const fr = rNum(1, 3);
-    foxing += `<circle cx="${fx}" cy="${fy}" r="${fr}" fill="#a08050" opacity="${(rNum(3,8)/100).toFixed(2)}"/>`;
+    foxing += `<circle cx="${rNum(pad + 10, W - pad - 10)}" cy="${rNum(pad + 10, H - pad - 10)}" r="${rNum(1, 3)}" fill="#a08050" opacity="${(rNum(3,7)/100).toFixed(2)}"/>`;
   }
 
-  // Fold crease line (horizontal, subtle)
   const creaseY = rNum(70, 130);
+  const stainX = rNum(60, 200);
+  const stainY = rNum(30, 170);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 200">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">
   <defs>
     <filter id="grain" x="0%" y="0%" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="5" seed="${grainSeed}" result="noise"/>
-      <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
-      <feBlend in="SourceGraphic" in2="grayNoise" mode="multiply" result="grained"/>
-      <feComponentTransfer in="grained"><feFuncA type="linear" slope="1"/></feComponentTransfer>
-    </filter>
-    <filter id="heavyGrain" x="0%" y="0%" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="6" seed="${grainSeed + 1}" result="noise"/>
+      <feTurbulence type="fractalNoise" baseFrequency="1.0" numOctaves="5" seed="${grainSeed}" result="noise"/>
       <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
       <feBlend in="SourceGraphic" in2="grayNoise" mode="multiply" result="grained"/>
       <feComponentTransfer in="grained"><feFuncA type="linear" slope="1"/></feComponentTransfer>
@@ -666,11 +644,10 @@ function generateTicketArt(concert, style) {
     <filter id="age">
       <feColorMatrix type="matrix" values="1.05 0.06 0.02 0 0.02  0.01 1.02 0.01 0 0.01  0 0.01 0.90 0 -0.02  0 0 0 1 0"/>
     </filter>
-    <filter id="scanned"><feGaussianBlur stdDeviation="0.3"/></filter>
-    <filter id="worn">
-      <feTurbulence type="turbulence" baseFrequency="0.03" numOctaves="3" seed="${grainSeed + 2}" result="warp"/>
-      <feDisplacementMap in="SourceGraphic" in2="warp" scale="1.5" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
+    <filter id="scanned"><feGaussianBlur stdDeviation="0.25"/></filter>
+    <clipPath id="tornEdge">
+      <path d="${tornPath} L ${W - pad} ${pad + tH} L ${W - pad} ${pad} Z"/>
+    </clipPath>
     <style>
       .tk-bold { font-family: 'Arial Black', 'Impact', Arial, sans-serif; font-weight: 900; }
       .tk-body { font-family: 'Arial Narrow', Arial, sans-serif; font-weight: 700; }
@@ -679,144 +656,105 @@ function generateTicketArt(concert, style) {
   </defs>
 
   <!-- Scanner bed -->
-  <rect width="520" height="200" fill="#0a0a0a"/>
+  <rect width="${W}" height="${H}" fill="#0a0a0a"/>
 
-  <g transform="rotate(${rot}, 260, 100)" filter="url(#age)">
+  <g transform="rotate(${rot}, ${W/2}, ${H/2})" filter="url(#age)">
 
-    <!-- ═══ LEFT STUB ═══ -->
-    <rect x="6" y="6" width="${stubW}" height="188" rx="1" fill="${c.stub}"/>
-    <rect x="6" y="6" width="${stubW}" height="188" rx="1" filter="url(#grain)" opacity="0.15"/>
-    <!-- Stub aging -->
-    <rect x="6" y="6" width="${stubW}" height="188" rx="1" fill="#d8c898" opacity="0.08"/>
+    <!-- Ticket body clipped to torn edge -->
+    <g clip-path="url(#tornEdge)">
 
-    <!-- Stub top band -->
-    <rect x="6" y="6" width="${stubW}" height="16" fill="${c.stockDk}"/>
-    <text x="${6 + stubW/2}" y="16" text-anchor="middle" class="tk-mono" font-size="5.5" fill="${c.accent}" letter-spacing="1">${esc(serialPrefix)}</text>
+      <!-- Cream paper -->
+      <rect x="${pad}" y="${pad}" width="${tW}" height="${tH}" fill="${c.paper}"/>
+      <rect x="${pad}" y="${pad}" width="${tW}" height="${tH}" filter="url(#grain)" opacity="0.12"/>
 
-    <g filter="url(#scanned)">
-      <!-- Stub venue -->
-      <text x="${6 + stubW/2}" y="35" text-anchor="middle" class="tk-bold" font-size="7" fill="${c.ink}" letter-spacing="0.5">${esc(venue.length > 18 ? venue.substring(0,16)+'..' : venue)}</text>
-      <text x="${6 + stubW/2}" y="43" text-anchor="middle" class="tk-body" font-size="5.5" fill="${c.inkLt}">${esc(city.length > 20 ? city.substring(0,18)+'..' : city)}</text>
+      <!-- Edge yellowing -->
+      <rect x="${pad}" y="${pad}" width="15" height="${tH}" fill="#d8c898" opacity="0.12"/>
+      <rect x="${W - pad - 15}" y="${pad}" width="15" height="${tH}" fill="#d8c898" opacity="0.08"/>
+      <rect x="${pad}" y="${pad}" width="${tW}" height="12" fill="#d8c898" opacity="0.06"/>
+      <rect x="${pad}" y="${H - pad - 12}" width="${tW}" height="12" fill="#d8c898" opacity="0.08"/>
 
-      <!-- Stub artist -->
-      <text x="${6 + stubW/2}" y="62" text-anchor="middle" class="tk-bold" font-size="${Math.min(11, Math.max(7, Math.floor(110 / Math.max(artist.length, 8))))}" fill="${c.ink}">${esc(artist.length > 20 ? artist.substring(0,18)+'..' : artist)}</text>
+      <!-- Age stain -->
+      <circle cx="${stainX}" cy="${stainY}" r="${rNum(20,40)}" fill="#c8a860" opacity="0.06"/>
 
-      <!-- Stub date -->
-      <text x="${6 + stubW/2}" y="80" text-anchor="middle" class="tk-bold" font-size="7" fill="${c.ink}">${esc(fullDate)}</text>
-      <text x="${6 + stubW/2}" y="88" text-anchor="middle" class="tk-body" font-size="6" fill="${c.inkLt}">${timeStr}</text>
+      <!-- Foxing spots -->
+      ${foxing}
 
-      <!-- Stub info boxes -->
-      <line x1="12" y1="94" x2="${stubW}" y2="94" stroke="${c.ink}" stroke-width="0.3" opacity="0.4"/>
-      <text x="16" y="104" class="tk-body" font-size="4.5" fill="${c.inkLt}">SECTION</text>
-      <text x="16" y="113" class="tk-bold" font-size="9" fill="${c.ink}">${esc(sectionCode)}</text>
-      <text x="75" y="104" class="tk-body" font-size="4.5" fill="${c.inkLt}">ROW</text>
-      <text x="75" y="113" class="tk-bold" font-size="9" fill="${c.ink}">${esc(rowCode)}</text>
+      <!-- Fold crease -->
+      <line x1="${pad}" y1="${creaseY}" x2="${W - pad}" y2="${creaseY}" stroke="#a09070" stroke-width="0.4" opacity="0.10"/>
 
-      <text x="16" y="127" class="tk-body" font-size="4.5" fill="${c.inkLt}">SEAT</text>
-      <text x="16" y="136" class="tk-bold" font-size="9" fill="${c.ink}">${esc(seatCode)}</text>
-      <text x="75" y="127" class="tk-body" font-size="4.5" fill="${c.inkLt}">PRICE</text>
-      <text x="75" y="136" class="tk-bold" font-size="8" fill="${c.ink}">${esc(price)}</text>
+      <!-- ══ TOP BANNER — colored ══ -->
+      <rect x="${pad}" y="${pad}" width="${tW}" height="14" fill="${c.stockDk}"/>
+      <text x="${cx}" y="${pad + 10}" text-anchor="middle" class="tk-body" font-size="4.5" fill="${c.bannerText}" letter-spacing="1.5">NO REFUNDS / EXCHANGES · NOT REFUNDABLE</text>
 
-      <!-- Stub bottom -->
-      <text x="${6 + stubW/2}" y="152" text-anchor="middle" class="tk-body" font-size="5" fill="${c.inkLt}">GEN ADMISSION</text>
-    </g>
+      <g filter="url(#scanned)">
 
-    <!-- Stub barcode -->
-    <g transform="translate(35, 158)">${stubBarcode}</g>
-    <text x="${6 + stubW/2}" y="194" text-anchor="middle" class="tk-mono" font-size="4" fill="${c.inkLt}">${esc(ticketNum)}</text>
+        <!-- Serial top-right -->
+        <text x="${W - pad - 6}" y="${pad + 25}" text-anchor="end" class="tk-mono" font-size="4" fill="${c.faded}" opacity="0.6">${esc(serialPrefix)}</text>
 
-    <!-- ═══ PERFORATION LINE ═══ -->
-    ${perf}
+        <!-- Venue -->
+        <text x="${cx}" y="${pad + 32}" text-anchor="middle" class="tk-bold" font-size="11" fill="${c.ink}" letter-spacing="1">${esc(venue.length > 24 ? venue.substring(0,22)+'..' : venue)}</text>
+        <text x="${cx}" y="${pad + 42}" text-anchor="middle" class="tk-body" font-size="7" fill="${c.inkLt}" letter-spacing="0.5">${esc(city)}</text>
 
-    <!-- ═══ MAIN TICKET BODY — white/cream paper ═══ -->
-    <rect x="${mainX}" y="6" width="${mainW}" height="188" rx="1" fill="${c.paper}"/>
-    <!-- Paper grain texture -->
-    <rect x="${mainX}" y="6" width="${mainW}" height="188" rx="1" filter="url(#heavyGrain)" opacity="0.12"/>
-    <!-- Yellowing around edges -->
-    <rect x="${mainX}" y="6" width="20" height="188" fill="#d8c898" opacity="0.10"/>
-    <rect x="${mainX + mainW - 20}" y="6" width="20" height="188" fill="#d8c898" opacity="0.08"/>
-    <rect x="${mainX}" y="6" width="${mainW}" height="18" fill="#d8c898" opacity="0.06"/>
-    <rect x="${mainX}" y="176" width="${mainW}" height="18" fill="#d8c898" opacity="0.08"/>
+        <!-- Separator -->
+        <line x1="${pad + 10}" y1="${pad + 47}" x2="${W - pad - 10}" y2="${pad + 47}" stroke="${c.ink}" stroke-width="0.3" opacity="0.25"/>
 
-    <!-- Age stains — multiple -->
-    <circle cx="${stainX}" cy="${stainY}" r="${rNum(25,50)}" fill="#c8a860" opacity="0.07"/>
-    <circle cx="${stain2X}" cy="${stain2Y}" r="${rNum(15,35)}" fill="#b89848" opacity="0.05"/>
-    <circle cx="${stain3X}" cy="${stain3Y}" r="${rNum(10,25)}" fill="#d0b870" opacity="0.04"/>
+        <!-- Presenter -->
+        <text x="${cx}" y="${pad + 56}" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}" letter-spacing="1.5">AN EVENING WITH</text>
 
-    <!-- Foxing spots -->
-    ${foxing}
+        <!-- ★ ARTIST NAME ★ -->
+        <text x="${cx}" y="${pad + 56 + artistSize + 8}" text-anchor="middle" class="tk-bold" font-size="${artistSize}" fill="${c.ink}" letter-spacing="1.5">${esc(artist.length > 26 ? artist.substring(0,24)+'..' : artist)}</text>
 
-    <!-- Fold crease -->
-    <line x1="${mainX}" y1="${creaseY}" x2="${mainX + mainW}" y2="${creaseY}" stroke="#a09070" stroke-width="0.5" opacity="0.12"/>
-    <rect x="${mainX}" y="${creaseY - 1}" width="${mainW}" height="2" fill="#c8b888" opacity="0.05"/>
+        <!-- Date + Time -->
+        <text x="${cx}" y="${pad + 100}" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(fullDate)}  ${timeStr}</text>
 
-    <!-- Top banner: NO REFUNDS — colored band on white paper -->
-    <rect x="${mainX}" y="6" width="${mainW}" height="16" fill="${c.stockDk}"/>
-    <text x="${mainCx}" y="16.5" text-anchor="middle" class="tk-body" font-size="5" fill="${c.bannerText}" letter-spacing="2">NO REFUNDS / EXCHANGES · SERVICE CHARGES NOT REFUNDABLE</text>
+        <!-- Divider -->
+        <line x1="${pad + 8}" y1="${pad + 106}" x2="${W - pad - 8}" y2="${pad + 106}" stroke="${c.ink}" stroke-width="0.3" opacity="0.25"/>
 
-    <g filter="url(#scanned)">
+        <!-- Info band -->
+        <rect x="${pad}" y="${pad + 109}" width="${tW}" height="24" fill="${c.stock}" opacity="0.12"/>
 
-      <!-- Venue name — big across top -->
-      <text x="${mainCx}" y="38" text-anchor="middle" class="tk-bold" font-size="14" fill="${c.ink}" letter-spacing="1.5">${esc((venue.length > 36 ? venue.substring(0,34)+'..' : venue))}</text>
-      <text x="${mainCx}" y="49" text-anchor="middle" class="tk-body" font-size="9" fill="${c.inkLt}" letter-spacing="1">${esc(city)}</text>
+        <!-- Section / Row / Seat / Price -->
+        <text x="${pad + 30}" y="${pad + 117}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.faded}">SECTION</text>
+        <rect x="${pad + 8}" y="${pad + 119}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.10"/>
+        <text x="${pad + 30}" y="${pad + 128}" text-anchor="middle" class="tk-bold" font-size="8" fill="${c.ink}">${esc(sectionCode.length > 7 ? sectionCode.substring(0,6) : sectionCode)}</text>
 
-      <!-- Separator -->
-      <line x1="${mainX + 12}" y1="54" x2="${mainX + mainW - 12}" y2="54" stroke="${c.ink}" stroke-width="0.4" opacity="0.3"/>
+        <text x="${pad + 82}" y="${pad + 117}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.faded}">ROW</text>
+        <rect x="${pad + 60}" y="${pad + 119}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.10"/>
+        <text x="${pad + 82}" y="${pad + 128}" text-anchor="middle" class="tk-bold" font-size="8" fill="${c.ink}">${esc(rowCode)}</text>
 
-      <!-- Presenter line -->
-      <text x="${mainCx}" y="64" text-anchor="middle" class="tk-body" font-size="6" fill="${c.faded}" letter-spacing="2">AN EVENING WITH</text>
+        <text x="${pad + 134}" y="${pad + 117}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.faded}">SEAT</text>
+        <rect x="${pad + 112}" y="${pad + 119}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.10"/>
+        <text x="${pad + 134}" y="${pad + 128}" text-anchor="middle" class="tk-bold" font-size="8" fill="${c.ink}">${esc(seatCode)}</text>
 
-      <!-- ★ ARTIST NAME — the star of the show ★ -->
-      <text x="${mainCx}" y="${artistSize > 28 ? 95 : artistSize > 22 ? 93 : 90}" text-anchor="middle" class="tk-bold" font-size="${artistSize}" fill="${c.ink}" letter-spacing="2">${esc(artist.length > 30 ? artist.substring(0,28)+'..' : artist)}</text>
+        <text x="${W - pad - 32}" y="${pad + 117}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.faded}">PRICE</text>
+        <rect x="${W - pad - 54}" y="${pad + 119}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.10"/>
+        <text x="${W - pad - 32}" y="${pad + 128}" text-anchor="middle" class="tk-bold" font-size="8" fill="${c.ink}">${esc(price)}</text>
 
-      <!-- Date + Time — prominent -->
-      <text x="${mainCx}" y="112" text-anchor="middle" class="tk-bold" font-size="12" fill="${c.ink}">${esc(fullDate)}  ${timeStr}</text>
+        <!-- GEN ADM -->
+        <text x="${cx}" y="${pad + 146}" text-anchor="middle" class="tk-mono" font-size="6" fill="${c.ink}" letter-spacing="2">GEN ADM</text>
 
-      <!-- Bottom divider -->
-      <line x1="${mainX + 8}" y1="120" x2="${mainX + mainW - 8}" y2="120" stroke="${c.ink}" stroke-width="0.4" opacity="0.3"/>
+      </g>
 
-      <!-- Bottom info band — colored stripe on paper -->
-      <rect x="${mainX}" y="123" width="${mainW}" height="30" fill="${c.stock}" opacity="0.15"/>
+      <!-- Barcode -->
+      <g transform="translate(${cx - bx/2}, ${pad + 152})">${barcode}</g>
+      <text x="${cx}" y="${pad + 176}" text-anchor="middle" class="tk-mono" font-size="4" fill="${c.faded}" letter-spacing="0.5">${esc(ticketNum)}  ${esc(sectionCode.length > 7 ? sectionCode.substring(0,6) : sectionCode)}  ${esc(serialSuffix)}</text>
 
-      <!-- Section / Row / Seat / Price boxes -->
-      <text x="${mainX + 40}" y="133" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">SECTION</text>
-      <rect x="${mainX + 12}" y="136" width="56" height="14" rx="1" fill="${c.stock}" opacity="0.12"/>
-      <text x="${mainX + 40}" y="147" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(sectionCode)}</text>
-
-      <text x="${mainX + 110}" y="133" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">ROW/BOX</text>
-      <rect x="${mainX + 82}" y="136" width="56" height="14" rx="1" fill="${c.stock}" opacity="0.12"/>
-      <text x="${mainX + 110}" y="147" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(rowCode)}</text>
-
-      <text x="${mainX + 180}" y="133" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">SEAT</text>
-      <rect x="${mainX + 152}" y="136" width="56" height="14" rx="1" fill="${c.stock}" opacity="0.12"/>
-      <text x="${mainX + 180}" y="147" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(seatCode)}</text>
-
-      <text x="${mainX + mainW - 50}" y="133" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">PRICE(TAX INCL)</text>
-      <rect x="${mainX + mainW - 78}" y="136" width="56" height="14" rx="1" fill="${c.stock}" opacity="0.12"/>
-      <text x="${mainX + mainW - 50}" y="147" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(price)}</text>
-
-      <!-- Gen Admission line -->
-      <text x="${mainCx}" y="162" text-anchor="middle" class="tk-mono" font-size="7" fill="${c.ink}" letter-spacing="3">GEN ADM</text>
+      <!-- Edge wear -->
+      <rect x="${pad}" y="${pad}" width="8" height="8" fill="#000" opacity="0.06" rx="1"/>
+      <rect x="${W - pad - 8}" y="${pad}" width="8" height="8" fill="#000" opacity="0.05" rx="1"/>
+      <rect x="${pad}" y="${H - pad - 8}" width="8" height="8" fill="#000" opacity="0.07" rx="1"/>
+      <rect x="${W - pad - 8}" y="${H - pad - 8}" width="8" height="8" fill="#000" opacity="0.06" rx="1"/>
+      <!-- Scuffs -->
+      <rect x="${rNum(40, 140)}" y="${pad}" width="${rNum(20, 40)}" height="2" fill="#000" opacity="0.03"/>
+      <rect x="${rNum(100, 220)}" y="${H - pad - 2}" width="${rNum(20, 40)}" height="2" fill="#000" opacity="0.04"/>
+      <!-- Faded handling patch -->
+      <rect x="${rNum(60, 160)}" y="${rNum(50, 120)}" width="${rNum(30, 50)}" height="${rNum(15, 30)}" rx="6" fill="#f8f4ee" opacity="0.05"/>
 
     </g>
 
-    <!-- Barcode -->
-    <g transform="translate(${mainX + mainW/2 - bx/2}, 168)">${barcode}</g>
-    <text x="${mainCx}" y="192" text-anchor="middle" class="tk-mono" font-size="4.5" fill="${c.faded}" letter-spacing="0.5">${esc(ticketNum)}  ${esc(sectionCode)}  ${esc(serialSuffix)}</text>
+    <!-- Torn edge shadow (subtle depth along the rip) -->
+    <path d="${tornPath}" fill="none" stroke="#000" stroke-width="0.8" opacity="0.15"/>
 
-    <!-- Edge wear — heavier -->
-    <rect x="6" y="6" width="12" height="12" fill="#000" opacity="0.07" rx="2"/>
-    <rect x="${mainX + mainW - 4}" y="6" width="12" height="10" fill="#000" opacity="0.06" rx="2"/>
-    <rect x="6" y="182" width="12" height="12" fill="#000" opacity="0.08" rx="2"/>
-    <rect x="${mainX + mainW - 4}" y="184" width="12" height="10" fill="#000" opacity="0.07" rx="2"/>
-    <!-- Top/bottom edge scuffs -->
-    <rect x="${rNum(80, 200)}" y="6" width="${rNum(30, 60)}" height="3" fill="#000" opacity="0.04"/>
-    <rect x="${rNum(250, 400)}" y="191" width="${rNum(30, 60)}" height="3" fill="#000" opacity="0.03"/>
-    <!-- Faded patch (as if rubbed/handled) -->
-    <rect x="${rNum(180, 350)}" y="${rNum(60, 120)}" width="${rNum(40, 80)}" height="${rNum(20, 40)}" rx="8" fill="#f8f4ee" opacity="0.06"/>
-
-    <!-- Overall worn texture overlay -->
-    <rect x="6" y="6" width="${mainX + mainW - 6}" height="188" filter="url(#worn)" opacity="0.04" fill="none"/>
   </g>
 </svg>`;
 }
