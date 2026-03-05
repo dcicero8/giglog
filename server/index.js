@@ -159,7 +159,7 @@ app.get('/api/seatgeek/status', (req, res) => {
 app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
-  const cacheKey = 'seatgeek_la_concerts_60d';
+  const cacheKey = 'seatgeek_la_concerts_60d_v2';
   const cached = db.prepare('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = ?').get(cacheKey);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
@@ -175,7 +175,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
       'taxonomies.name': 'concert',
       'datetime_local.gte': today,
       'datetime_local.lte': future,
-      'per_page': '50',
+      'per_page': '200',
       'sort': 'datetime_local.asc',
       'client_id': process.env.SEATGEEK_CLIENT_ID,
       ...(process.env.SEATGEEK_CLIENT_SECRET ? { 'client_secret': process.env.SEATGEEK_CLIENT_SECRET } : {}),

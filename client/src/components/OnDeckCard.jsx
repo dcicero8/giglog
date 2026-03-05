@@ -1,17 +1,21 @@
-export default function OnDeckCard({ event, onSave, onDismiss }) {
+export default function OnDeckCard({ event, onSave, onDismiss, isWishlist }) {
   const formattedDate = event.date
     ? new Date(event.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     : ''
 
   return (
-    <div className="bg-bg-card/50 border border-border/60 rounded-xl overflow-hidden transition-all duration-300 hover:bg-bg-card hover:border-border-hover hover:shadow-[0_0_25px_rgba(167,139,250,0.06)] group">
+    <div className={`rounded-xl overflow-hidden transition-all duration-300 group ${
+      isWishlist
+        ? 'bg-warning/10 border-2 border-warning/50 hover:border-warning hover:shadow-[0_0_30px_rgba(251,191,36,0.15)]'
+        : 'bg-bg-card/50 border border-border/60 hover:bg-bg-card hover:border-border-hover hover:shadow-[0_0_25px_rgba(167,139,250,0.06)]'
+    }`}>
       {/* Performer image */}
       {event.image && (
         <div className="h-28 overflow-hidden relative">
           <img
             src={event.image}
             alt={event.artist}
-            className="w-full h-full object-cover opacity-70"
+            className={`w-full h-full object-cover ${isWishlist ? 'opacity-90' : 'opacity-70'}`}
           />
           {/* Dismiss button - top right of image */}
           {onDismiss && (
@@ -27,6 +31,11 @@ export default function OnDeckCard({ event, onSave, onDismiss }) {
       )}
 
       <div className="p-4">
+        {isWishlist && (
+          <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-warning/20 text-warning mb-2">
+            ★ Wishlist
+          </span>
+        )}
         <div className="flex items-start justify-between gap-1">
           <h3 className="font-heading font-bold text-sm text-text truncate mb-1">{event.artist}</h3>
           {/* Dismiss button fallback when no image */}

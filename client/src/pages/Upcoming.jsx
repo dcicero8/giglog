@@ -10,6 +10,7 @@ const emptyForm = { artist: '', venue: '', city: '', date: '', price: '', sectio
 
 export default function Upcoming() {
   const { data: shows, loading, refetch } = useApi('/upcoming')
+  const { data: wishlist } = useApi('/wishlist')
   const { data: aiStatus } = useApi('/ai-status')
   const aiAvailable = aiStatus?.available ?? false
   const [modalOpen, setModalOpen] = useState(false)
@@ -187,7 +188,27 @@ export default function Upcoming() {
     }
   }
 
-  const visibleOnDeck = onDeckEvents.filter(e => !dismissedArtists.has(e.artist))
+  // Build a set of wishlist artist names for matching (case-insensitive)
+  const wishlistNames = new Set((wishlist || []).map(w => w.artist.toLowerCase()))
+  const isWishlistMatch = (artistName) => {
+    if (!artistName) return false
+    const lower = artistName.toLowerCase()
+    // Exact match or partial match (e.g. "Bruce Springsteen" matches "Bruce Springsteen and the E Street Band")
+    for (const wName of wishlistNames) {
+      if (lower.includes(wName) || wName.includes(lower)) return true
+    }
+    return false
+  }
+
+  const visibleOnDeck = onDeckEvents
+    .filter(e => !dismissedArtists.has(e.artist))
+    .sort((a, b) => {
+      const aMatch = isWishlistMatch(a.artist) || isWishlistMatch(a.title)
+      const bMatch = isWishlistMatch(b.artist) || isWishlistMatch(b.title)
+      if (aMatch && !bMatch) return -1
+      if (!aMatch && bMatch) return 1
+      return 0 // preserve date order otherwise
+    })
 
   return (
     <div>
@@ -323,6 +344,7 @@ export default function Upcoming() {
                     event={event}
                     onSave={handleSaveOnDeck}
                     onDismiss={handleDismiss}
+                    isWishlist={isWishlistMatch(event.artist) || isWishlistMatch(event.title)}
                   />
                 ))}
               </div>
