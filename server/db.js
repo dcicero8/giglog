@@ -98,6 +98,12 @@ db.exec(`
     lon REAL NOT NULL,
     fetched_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS dismissed_artists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    artist TEXT NOT NULL UNIQUE,
+    dismissed_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migrations for new columns (safe to run multiple times)

@@ -200,6 +200,28 @@ app.get('/api/seatgeek/events', async (req, res) => {
   }
 });
 
+// Dismissed artists (hide from On Deck)
+app.get('/api/dismissed-artists', (req, res) => {
+  const rows = db.prepare('SELECT artist FROM dismissed_artists ORDER BY dismissed_at DESC').all();
+  res.json(rows.map(r => r.artist));
+});
+
+app.post('/api/dismissed-artists', (req, res) => {
+  const { artist } = req.body;
+  if (!artist) return res.status(400).json({ error: 'Artist name required' });
+  try {
+    db.prepare('INSERT OR IGNORE INTO dismissed_artists (artist) VALUES (?)').run(artist);
+  } catch (err) { /* already exists */ }
+  const rows = db.prepare('SELECT artist FROM dismissed_artists ORDER BY dismissed_at DESC').all();
+  res.json(rows.map(r => r.artist));
+});
+
+app.delete('/api/dismissed-artists/:artist', (req, res) => {
+  db.prepare('DELETE FROM dismissed_artists WHERE artist = ?').run(decodeURIComponent(req.params.artist));
+  const rows = db.prepare('SELECT artist FROM dismissed_artists ORDER BY dismissed_at DESC').all();
+  res.json(rows.map(r => r.artist));
+});
+
 // AI ticket art generation
 const TICKET_STYLES = ['classic', 'punk', 'psychedelic', 'minimal', 'vintage', 'festival'];
 

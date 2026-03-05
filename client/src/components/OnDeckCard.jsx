@@ -1,23 +1,45 @@
-export default function OnDeckCard({ event, onSave }) {
+export default function OnDeckCard({ event, onSave, onDismiss }) {
   const formattedDate = event.date
     ? new Date(event.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     : ''
 
   return (
-    <div className="bg-bg-card/50 border border-border/60 rounded-xl overflow-hidden transition-all duration-300 hover:bg-bg-card hover:border-border-hover hover:shadow-[0_0_25px_rgba(167,139,250,0.06)]">
+    <div className="bg-bg-card/50 border border-border/60 rounded-xl overflow-hidden transition-all duration-300 hover:bg-bg-card hover:border-border-hover hover:shadow-[0_0_25px_rgba(167,139,250,0.06)] group">
       {/* Performer image */}
       {event.image && (
-        <div className="h-28 overflow-hidden">
+        <div className="h-28 overflow-hidden relative">
           <img
             src={event.image}
             alt={event.artist}
             className="w-full h-full object-cover opacity-70"
           />
+          {/* Dismiss button - top right of image */}
+          {onDismiss && (
+            <button
+              onClick={() => onDismiss(event)}
+              className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center text-xs rounded-full bg-black/60 text-white/70 hover:bg-accent hover:text-white transition-colors border-0 cursor-pointer opacity-0 group-hover:opacity-100"
+              title={`Hide ${event.artist}`}
+            >
+              ✕
+            </button>
+          )}
         </div>
       )}
 
       <div className="p-4">
-        <h3 className="font-heading font-bold text-sm text-text truncate mb-1">{event.artist}</h3>
+        <div className="flex items-start justify-between gap-1">
+          <h3 className="font-heading font-bold text-sm text-text truncate mb-1">{event.artist}</h3>
+          {/* Dismiss button fallback when no image */}
+          {!event.image && onDismiss && (
+            <button
+              onClick={() => onDismiss(event)}
+              className="text-text-dim/40 hover:text-accent text-xs bg-transparent border-0 cursor-pointer p-0 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              title={`Hide ${event.artist}`}
+            >
+              ✕
+            </button>
+          )}
+        </div>
         <p className="text-xs text-text-muted truncate">
           {event.venue}{event.city ? ` · ${event.city}` : ''}
         </p>

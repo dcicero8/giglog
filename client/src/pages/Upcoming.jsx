@@ -22,6 +22,7 @@ export default function Upcoming() {
   const [onDeckEvents, setOnDeckEvents] = useState([])
   const [onDeckLoading, setOnDeckLoading] = useState(true)
   const [onDeckError, setOnDeckError] = useState(null)
+  const [dismissedArtists, setDismissedArtists] = useState(new Set())
 
   useEffect(() => {
     const fetchSeatGeek = async () => {
@@ -33,8 +34,12 @@ export default function Upcoming() {
           return
         }
         setSeatgeekAvailable(true)
-        const events = await api.get('/seatgeek/events')
+        const [events, dismissed] = await Promise.all([
+          api.get('/seatgeek/events'),
+          api.get('/dismissed-artists'),
+        ])
         setOnDeckEvents(events)
+        setDismissedArtists(new Set(dismissed))
       } catch (err) {
         console.error('SeatGeek fetch error:', err)
         setOnDeckError(err.message)
@@ -122,6 +127,29 @@ export default function Upcoming() {
     }
   }
 
+  const handleDismiss = async (event) => {
+    try {
+      const updated = await api.post('/dismissed-artists', { artist: event.artist })
+      setDismissedArtists(new Set(updated))
+    } catch (err) {
+      alert('Failed to dismiss: ' + err.message)
+    }
+  }
+
+  const handleUndismissAll = async () => {
+    if (!window.confirm(`Unhide all ${dismissedArtists.size} dismissed artists?`)) return
+    try {
+      for (const artist of dismissedArtists) {
+        await api.delete(`/dismissed-artists/${encodeURIComponent(artist)}`)
+      }
+      setDismissedArtists(new Set())
+    } catch (err) {
+      alert('Failed: ' + err.message)
+    }
+  }
+
+  const visibleOnDeck = onDeckEvents.filter(e => !dismissedArtists.has(e.artist))
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -187,9 +215,19 @@ export default function Upcoming() {
                 <span className="text-warning">🎯</span> On Deck
                 <span className="text-text-dim font-normal normal-case tracking-normal">· LA Area · Next 30 Days</span>
               </h2>
-              {onDeckEvents.length > 0 && (
-                <span className="text-xs text-text-dim">{onDeckEvents.length} shows</span>
-              )}
+              <div className="flex items-center gap-3">
+                {dismissedArtists.size > 0 && (
+                  <button
+                    onClick={handleUndismissAll}
+                    className="text-xs text-text-dim hover:text-text-muted transition-colors bg-transparent border-0 cursor-pointer"
+                  >
+                    {dismissedArtists.size} hidden · Reset
+                  </button>
+                )}
+                {visibleOnDeck.length > 0 && (
+                  <span className="text-xs text-text-dim">{visibleOnDeck.length} shows</span>
+                )}
+              </div>
             </div>
 
             {onDeckLoading ? (
@@ -203,17 +241,23 @@ export default function Upcoming() {
                 <p className="text-text-muted text-sm">Couldn't load SeatGeek events</p>
                 <p className="text-text-dim text-xs mt-1">{onDeckError}</p>
               </div>
-            ) : onDeckEvents.length === 0 ? (
+            ) : visibleOnDeck.length === 0 ? (
               <div className="text-center py-10 bg-bg-card/30 border border-border/40 rounded-xl">
-                <p className="text-text-muted text-sm">No concerts found in the LA area for the next 30 days</p>
+                <p className="text-text-muted text-sm">
+                  {dismissedArtists.size > 0
+                    ? `All events hidden · ${dismissedArtists.size} artist${dismissedArtists.size !== 1 ? 's' : ''} dismissed`
+                    : 'No concerts found in the LA area for the next 30 days'
+                  }
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {onDeckEvents.map(event => (
+                {visibleOnDeck.map(event => (
                   <OnDeckCard
                     key={event.id}
                     event={event}
                     onSave={handleSaveOnDeck}
+                    onDismiss={handleDismiss}
                   />
                 ))}
               </div>
