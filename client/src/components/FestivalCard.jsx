@@ -251,13 +251,13 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
   return (
     <div className="bg-bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:border-border-hover hover:shadow-[0_0_25px_rgba(255,60,100,0.08)]">
-      {/* Poster Image */}
+      {/* Poster Image — zoomed out with black sides */}
       {concert.poster_image && (
-        <div className="relative group">
+        <div className="relative group bg-black flex items-center justify-center" style={{ maxHeight: '320px' }}>
           <img
             src={`/uploads/posters/${concert.poster_image}`}
             alt={`${concert.artist} poster`}
-            className="w-full max-h-72 object-cover"
+            className="max-w-full max-h-80 object-contain"
           />
           <button
             onClick={handleRemovePoster}
