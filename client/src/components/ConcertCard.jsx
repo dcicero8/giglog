@@ -399,6 +399,28 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
             {uploading ? 'Uploading...' : concert.ticket_image ? '📷 Replace Ticket' : '📷 Upload Ticket'}
           </button>
 
+          {/* AI Generate (next to upload ticket) */}
+          {aiAvailable && (
+            <>
+              <select
+                value={style}
+                onChange={e => setStyle(e.target.value)}
+                className="px-2 py-1 text-xs rounded-lg bg-bg-input border border-border text-text cursor-pointer"
+              >
+                {STYLES.map(s => (
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {generating ? 'Printing...' : concert.ticket_art_svg ? '🎟️ Reprint Ticket' : '🎟️ Print Ticket'}
+              </button>
+            </>
+          )}
+
           {/* Upload poster */}
           <input
             ref={posterFileRef}
@@ -414,28 +436,6 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
           >
             {posterUploading ? 'Uploading...' : concert.poster_image ? '🎨 Replace Poster' : '🎨 Upload Poster'}
           </button>
-
-          {/* AI Generate (only if available) */}
-          {aiAvailable && (
-            <>
-              <select
-                value={style}
-                onChange={e => setStyle(e.target.value)}
-                className="px-2 py-1 text-xs rounded-lg bg-bg-input border border-border text-text cursor-pointer"
-              >
-                {STYLES.map(s => (
-                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleGenerate}
-                disabled={generating}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {generating ? 'Printing...' : concert.ticket_art_svg ? '🎟️ Reprint Ticket' : '🎟️ Print Ticket'}
-              </button>
-            </>
-          )}
         </div>
       </div>
       </div>
