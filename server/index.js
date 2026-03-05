@@ -302,6 +302,24 @@ Return ONLY the JSON, no markdown, no explanation.`,
 
     const parsed = JSON.parse(jsonMatch[0]);
 
+    // Normalize the date to YYYY-MM-DD
+    let normalizedDate = '';
+    if (parsed.date) {
+      const d = new Date(parsed.date);
+      if (!isNaN(d.getTime()) && d.getFullYear() >= 1950) {
+        normalizedDate = d.toISOString().split('T')[0];
+      } else {
+        // Try parsing common formats like "Aug 14, 1992" or "03/28/2026"
+        const retry = new Date(String(parsed.date).replace(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/, (_, m, d, y) => {
+          const fullYear = y.length === 2 ? (parseInt(y) > 50 ? '19' + y : '20' + y) : y;
+          return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }));
+        if (!isNaN(retry.getTime()) && retry.getFullYear() >= 1950) {
+          normalizedDate = retry.toISOString().split('T')[0];
+        }
+      }
+    }
+
     // Clean up the temp file
     fs.unlinkSync(req.file.path);
 
@@ -309,7 +327,7 @@ Return ONLY the JSON, no markdown, no explanation.`,
       artist: parsed.artist || '',
       venue: parsed.venue || '',
       city: parsed.city || '',
-      date: parsed.date || '',
+      date: normalizedDate,
       price: parsed.price || '',
       section: parsed.section || '',
       notes: parsed.notes || '',

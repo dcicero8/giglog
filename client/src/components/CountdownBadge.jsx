@@ -4,6 +4,16 @@ export default function CountdownBadge({ date }) {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   const eventDate = new Date(date + 'T00:00:00')
+
+  // Guard against invalid or nonsensical dates
+  if (isNaN(eventDate.getTime()) || eventDate.getFullYear() < 1950) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-accent/20 text-accent">
+        Bad date
+      </span>
+    )
+  }
+
   const diffMs = eventDate - now
   const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
 
