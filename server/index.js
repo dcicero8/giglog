@@ -163,6 +163,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
       'per_page': '50',
       'sort': 'datetime_local.asc',
       'client_id': process.env.SEATGEEK_CLIENT_ID,
+      ...(process.env.SEATGEEK_CLIENT_SECRET ? { 'client_secret': process.env.SEATGEEK_CLIENT_SECRET } : {}),
     });
 
     const response = await fetch(`https://api.seatgeek.com/2/events?${params}`);
