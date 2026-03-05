@@ -23,7 +23,9 @@ const uploadsBase = process.env.NODE_ENV === 'production' && fs.existsSync('/app
   ? '/app/data/uploads'
   : path.join(__dirname, '..', 'uploads');
 const ticketsDir = path.join(uploadsBase, 'tickets');
+const postersDir = path.join(uploadsBase, 'posters');
 if (!fs.existsSync(ticketsDir)) fs.mkdirSync(ticketsDir, { recursive: true });
+if (!fs.existsSync(postersDir)) fs.mkdirSync(postersDir, { recursive: true });
 
 // Multer config for ticket images
 const ticketStorage = multer.diskStorage({
@@ -34,6 +36,16 @@ const ticketStorage = multer.diskStorage({
   },
 });
 const ticketUpload = multer({ storage: ticketStorage, limits: { fileSize: 10 * 1024 * 1024 } });
+
+// Multer config for poster images
+const posterStorage = multer.diskStorage({
+  destination: postersDir,
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
+});
+const posterUpload = multer({ storage: posterStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Serve uploaded files (photos + tickets)
 app.use('/uploads', express.static(uploadsBase));
@@ -393,6 +405,64 @@ app.delete('/api/upcoming/:id/ticket-image', (req, res) => {
   }
 
   db.prepare('UPDATE upcoming SET ticket_image = NULL WHERE id = ?').run(show.id);
+  res.json({ success: true });
+});
+
+// Poster image upload (concerts)
+app.post('/api/concerts/:id/poster-image', posterUpload.single('poster'), (req, res) => {
+  const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
+  if (!concert) return res.status(404).json({ error: 'Concert not found' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  if (concert.poster_image) {
+    const oldPath = path.join(postersDir, concert.poster_image);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  db.prepare('UPDATE concerts SET poster_image = ? WHERE id = ?').run(req.file.filename, concert.id);
+  res.json({ poster_image: req.file.filename });
+});
+
+// Delete poster image (concerts)
+app.delete('/api/concerts/:id/poster-image', (req, res) => {
+  const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
+  if (!concert) return res.status(404).json({ error: 'Concert not found' });
+
+  if (concert.poster_image) {
+    const filePath = path.join(postersDir, concert.poster_image);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+
+  db.prepare('UPDATE concerts SET poster_image = NULL WHERE id = ?').run(concert.id);
+  res.json({ success: true });
+});
+
+// Poster image upload (upcoming)
+app.post('/api/upcoming/:id/poster-image', posterUpload.single('poster'), (req, res) => {
+  const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
+  if (!show) return res.status(404).json({ error: 'Show not found' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  if (show.poster_image) {
+    const oldPath = path.join(postersDir, show.poster_image);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  db.prepare('UPDATE upcoming SET poster_image = ? WHERE id = ?').run(req.file.filename, show.id);
+  res.json({ poster_image: req.file.filename });
+});
+
+// Delete poster image (upcoming)
+app.delete('/api/upcoming/:id/poster-image', (req, res) => {
+  const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
+  if (!show) return res.status(404).json({ error: 'Show not found' });
+
+  if (show.poster_image) {
+    const filePath = path.join(postersDir, show.poster_image);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+
+  db.prepare('UPDATE upcoming SET poster_image = NULL WHERE id = ?').run(show.id);
   res.json({ success: true });
 });
 

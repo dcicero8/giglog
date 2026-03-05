@@ -120,6 +120,8 @@ const migrations = [
   "ALTER TABLE wishlist ADD COLUMN url TEXT",
   "ALTER TABLE concerts ADD COLUMN tour_name TEXT",
   "ALTER TABLE concerts ADD COLUMN end_date TEXT",
+  "ALTER TABLE concerts ADD COLUMN poster_image TEXT",
+  "ALTER TABLE upcoming ADD COLUMN poster_image TEXT",
 ];
 
 for (const sql of migrations) {

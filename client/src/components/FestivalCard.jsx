@@ -1,12 +1,15 @@
 import { useState, useRef, useMemo } from 'react'
 import { api } from '../lib/api'
 import { getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
+import StarRating from './StarRating'
 
 export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onViewBandSetlist, activeBandId, onAddDay }) {
   const [expanded, setExpanded] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [posterUploading, setPosterUploading] = useState(false)
   const [reordering, setReordering] = useState(false)
   const ticketFileRef = useRef(null)
+  const posterFileRef = useRef(null)
 
   const children = concert.children || []
   const year = concert.date ? new Date(concert.date + 'T00:00:00').getFullYear() : ''
@@ -79,6 +82,34 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
     try {
       await fetch(`/api/concerts/${concert.id}/ticket-image`, { method: 'DELETE' })
       onUpdate?.({ ...concert, ticket_image: null, children })
+    } catch (err) {
+      alert('Failed to remove: ' + err.message)
+    }
+  }
+
+  const handlePosterUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPosterUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('poster', file)
+      const res = await fetch(`/api/concerts/${concert.id}/poster-image`, { method: 'POST', body: formData })
+      if (!res.ok) throw new Error('Upload failed')
+      const data = await res.json()
+      onUpdate?.({ ...concert, poster_image: data.poster_image, children })
+    } catch (err) {
+      alert('Failed to upload: ' + err.message)
+    } finally {
+      setPosterUploading(false)
+      if (posterFileRef.current) posterFileRef.current.value = ''
+    }
+  }
+
+  const handleRemovePoster = async () => {
+    try {
+      await fetch(`/api/concerts/${concert.id}/poster-image`, { method: 'DELETE' })
+      onUpdate?.({ ...concert, poster_image: null, children })
     } catch (err) {
       alert('Failed to remove: ' + err.message)
     }
@@ -211,6 +242,23 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
   return (
     <div className="bg-bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:border-border-hover hover:shadow-[0_0_25px_rgba(255,60,100,0.08)]">
+      {/* Poster Image */}
+      {concert.poster_image && (
+        <div className="relative group">
+          <img
+            src={`/uploads/posters/${concert.poster_image}`}
+            alt={`${concert.artist} poster`}
+            className="w-full max-h-72 object-cover"
+          />
+          <button
+            onClick={handleRemovePoster}
+            className="absolute top-2 right-2 px-2 py-1 text-[10px] rounded bg-black/70 text-white hover:bg-accent transition-colors border-0 cursor-pointer opacity-0 group-hover:opacity-100"
+          >
+            Remove
+          </button>
+        </div>
+      )}
+
       {/* Ticket Image */}
       {concert.ticket_image && (
         <div className="relative group">
@@ -239,6 +287,11 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             {formattedDate && (
               <p className="text-sm text-text-muted mt-0.5">{formattedDate}</p>
             )}
+            {concert.rating > 0 && (
+              <div className="mt-1">
+                <StarRating rating={concert.rating} readonly size="sm" />
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1 ml-2 shrink-0">
             <button onClick={() => onEdit(concert)} className="text-text-muted hover:text-text bg-transparent border-0 cursor-pointer p-1 text-sm" title="Edit festival">
@@ -259,8 +312,8 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
           )}
         </div>
 
-        {/* Upload Ticket + Add Day buttons */}
-        <div className="flex items-center gap-2 mb-4">
+        {/* Upload Ticket + Poster + Add Day buttons */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           <input
             ref={ticketFileRef}
             type="file"
@@ -268,12 +321,26 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             onChange={handleTicketUpload}
             className="hidden"
           />
+          <input
+            ref={posterFileRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePosterUpload}
+            className="hidden"
+          />
           <button
             onClick={() => ticketFileRef.current?.click()}
             disabled={uploading}
             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {uploading ? 'Uploading...' : concert.ticket_image ? '📷 Replace Image' : '📷 Upload Ticket'}
+            {uploading ? 'Uploading...' : concert.ticket_image ? '📷 Replace Ticket' : '📷 Upload Ticket'}
+          </button>
+          <button
+            onClick={() => posterFileRef.current?.click()}
+            disabled={posterUploading}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {posterUploading ? 'Uploading...' : concert.poster_image ? '🎨 Replace Poster' : '🎨 Upload Poster'}
           </button>
           {onAddDay && (
             <button

@@ -21,7 +21,9 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
   const [ytUrl, setYtUrl] = useState('')
   const [ytMatch, setYtMatch] = useState('exact')
   const [uploading, setUploading] = useState(false)
+  const [posterUploading, setPosterUploading] = useState(false)
   const ticketFileRef = useRef(null)
+  const posterFileRef = useRef(null)
 
   const year = concert.date ? new Date(concert.date + 'T00:00:00').getFullYear() : ''
   const formattedDate = concert.date
@@ -70,6 +72,34 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
     }
   }
 
+  const handlePosterUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPosterUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('poster', file)
+      const res = await fetch(`/api/concerts/${concert.id}/poster-image`, { method: 'POST', body: formData })
+      if (!res.ok) throw new Error('Upload failed')
+      const data = await res.json()
+      onUpdate?.({ ...concert, poster_image: data.poster_image })
+    } catch (err) {
+      alert('Failed to upload: ' + err.message)
+    } finally {
+      setPosterUploading(false)
+      if (posterFileRef.current) posterFileRef.current.value = ''
+    }
+  }
+
+  const handleRemovePoster = async () => {
+    try {
+      await fetch(`/api/concerts/${concert.id}/poster-image`, { method: 'DELETE' })
+      onUpdate?.({ ...concert, poster_image: null })
+    } catch (err) {
+      alert('Failed to remove: ' + err.message)
+    }
+  }
+
   const handleSaveYT = async () => {
     if (!ytUrl.trim()) return
     try {
@@ -100,7 +130,25 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
   const matchInfo = concert.youtube_match ? YT_MATCH_ICONS[concert.youtube_match] : null
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-5 transition-all duration-300 hover:bg-bg-card-hover hover:border-border-hover hover:shadow-[0_0_25px_rgba(255,60,100,0.08)]">
+    <div className="bg-bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:bg-bg-card-hover hover:border-border-hover hover:shadow-[0_0_25px_rgba(255,60,100,0.08)]">
+      {/* Poster Image */}
+      {concert.poster_image && (
+        <div className="relative group">
+          <img
+            src={`/uploads/posters/${concert.poster_image}`}
+            alt={`${concert.artist} poster`}
+            className="w-full max-h-72 object-cover"
+          />
+          <button
+            onClick={handleRemovePoster}
+            className="absolute top-2 right-2 px-2 py-1 text-[10px] rounded bg-black/70 text-white hover:bg-accent transition-colors border-0 cursor-pointer opacity-0 group-hover:opacity-100"
+          >
+            Remove
+          </button>
+        </div>
+      )}
+
+      <div className="p-5">
       {/* Ticket Art / Uploaded Image */}
       {(concert.ticket_image || concert.ticket_art_svg) && (
         <div className="mb-4">
@@ -327,7 +375,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
         </div>
       )}
 
-      {/* Ticket Art: Upload + AI Generate */}
+      {/* Ticket Art: Upload + AI Generate + Poster */}
       <div className="mt-3 pt-3 border-t border-border">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Upload ticket image */}
@@ -343,7 +391,23 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
             disabled={uploading}
             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {uploading ? 'Uploading...' : concert.ticket_image ? '📷 Replace Image' : '📷 Upload Ticket'}
+            {uploading ? 'Uploading...' : concert.ticket_image ? '📷 Replace Ticket' : '📷 Upload Ticket'}
+          </button>
+
+          {/* Upload poster */}
+          <input
+            ref={posterFileRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePosterUpload}
+            className="hidden"
+          />
+          <button
+            onClick={() => posterFileRef.current?.click()}
+            disabled={posterUploading}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {posterUploading ? 'Uploading...' : concert.poster_image ? '🎨 Replace Poster' : '🎨 Upload Poster'}
           </button>
 
           {/* AI Generate (only if available) */}
@@ -368,6 +432,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
             </>
           )}
         </div>
+      </div>
       </div>
     </div>
   )

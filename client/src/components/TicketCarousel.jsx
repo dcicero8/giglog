@@ -38,50 +38,66 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
     )
   }
 
-  // 3D carousel for 3+ tickets
+  // Cylindrical carousel for 3+ tickets
+  // Radius scales with ticket count so cards don't overlap
+  const radius = Math.max(320, count * 45)
+
   const getStyle = (index) => {
     let offset = index - active
-    // Wrap around
+    // Wrap around for circular positioning
     if (offset > count / 2) offset -= count
     if (offset < -count / 2) offset += count
 
+    const angle = (offset / count) * 360 // degrees around the cylinder
+    const angleRad = (angle * Math.PI) / 180
+    const cosAngle = Math.cos(angleRad)
     const absOffset = Math.abs(offset)
-    const clamped = Math.min(absOffset, 3)
 
     return {
       transform: `
-        translateX(${offset * 180}px)
-        translateZ(${-clamped * 120}px)
-        rotateY(${-offset * 12}deg)
+        rotateY(${angle}deg)
+        translateZ(${radius}px)
       `,
-      zIndex: 100 - clamped,
-      opacity: clamped > 2 ? 0 : 1 - clamped * 0.25,
-      filter: absOffset === 0 ? 'none' : `brightness(${1 - clamped * 0.15})`,
-      transition: 'all 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+      zIndex: Math.round(100 + 100 * cosAngle),
+      opacity: cosAngle < -0.2 ? 0 : Math.max(0.15, (cosAngle + 0.2) / 1.2),
+      filter: absOffset === 0 ? 'none' : `brightness(${Math.max(0.45, 0.4 + cosAngle * 0.6)})`,
+      transition: 'all 500ms cubic-bezier(0.4, 0, 0.2, 1)',
       pointerEvents: absOffset <= 1 ? 'auto' : 'none',
     }
   }
 
   return (
     <div className="relative select-none">
-      {/* 3D scene */}
+      {/* 3D cylindrical scene */}
       <div
         className="relative flex items-center justify-center overflow-hidden"
-        style={{ perspective: 1200, height: 200 }}
+        style={{ perspective: 900, height: 220 }}
       >
-        {tickets.map((ticket, i) => (
-          <div
-            key={`${ticket.type}-${ticket.id}`}
-            className="absolute"
-            style={getStyle(i)}
-            onClick={() => {
-              if (i === active) onTicketClick?.(ticket)
-              else setActive(i)
-            }}
-          >
-            <TicketStub ticket={ticket} />
-          </div>
-        ))}
+        <div
+          style={{
+            transformStyle: 'preserve-3d',
+            width: 340,
+            height: 150,
+            position: 'relative',
+          }}
+        >
+          {tickets.map((ticket, i) => (
+            <div
+              key={`${ticket.type}-${ticket.id}`}
+              className="absolute top-0 left-0"
+              style={{
+                ...getStyle(i),
+                backfaceVisibility: 'hidden',
+              }}
+              onClick={() => {
+                if (i === active) onTicketClick?.(ticket)
+                else setActive(i)
+              }}
+            >
+              <TicketStub ticket={ticket} />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Navigation arrows */}
