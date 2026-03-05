@@ -11,6 +11,7 @@ const emptyForm = { artist: '', venue: '', city: '', date: '', price: '', sectio
 export default function Upcoming() {
   const { data: shows, loading, refetch } = useApi('/upcoming')
   const { data: wishlist } = useApi('/wishlist')
+  const { data: pastArtists } = useApi('/past-artists')
   const { data: aiStatus } = useApi('/ai-status')
   const aiAvailable = aiStatus?.available ?? false
   const [modalOpen, setModalOpen] = useState(false)
@@ -188,25 +189,33 @@ export default function Upcoming() {
     }
   }
 
-  // Build a set of wishlist artist names for matching (case-insensitive)
+  // Build sets for matching (case-insensitive, fuzzy)
   const wishlistNames = new Set((wishlist || []).map(w => w.artist.toLowerCase()))
-  const isWishlistMatch = (artistName) => {
+  const pastArtistNames = new Set((pastArtists || []).map(a => a.toLowerCase()))
+
+  const fuzzyMatch = (artistName, nameSet) => {
     if (!artistName) return false
     const lower = artistName.toLowerCase()
-    // Exact match or partial match (e.g. "Bruce Springsteen" matches "Bruce Springsteen and the E Street Band")
-    for (const wName of wishlistNames) {
-      if (lower.includes(wName) || wName.includes(lower)) return true
+    for (const name of nameSet) {
+      if (lower.includes(name) || name.includes(lower)) return true
     }
     return false
   }
 
+  const isWishlistMatch = (artistName) => fuzzyMatch(artistName, wishlistNames)
+  const isPastArtistMatch = (artistName) => fuzzyMatch(artistName, pastArtistNames)
+
   const visibleOnDeck = onDeckEvents
     .filter(e => !dismissedArtists.has(e.artist))
     .sort((a, b) => {
-      const aMatch = isWishlistMatch(a.artist) || isWishlistMatch(a.title)
-      const bMatch = isWishlistMatch(b.artist) || isWishlistMatch(b.title)
-      if (aMatch && !bMatch) return -1
-      if (!aMatch && bMatch) return 1
+      const aWishlist = isWishlistMatch(a.artist) || isWishlistMatch(a.title)
+      const bWishlist = isWishlistMatch(b.artist) || isWishlistMatch(b.title)
+      const aPast = isPastArtistMatch(a.artist) || isPastArtistMatch(a.title)
+      const bPast = isPastArtistMatch(b.artist) || isPastArtistMatch(b.title)
+      // Priority: wishlist first, then past artists, then everything else
+      const aScore = aWishlist ? 2 : aPast ? 1 : 0
+      const bScore = bWishlist ? 2 : bPast ? 1 : 0
+      if (aScore !== bScore) return bScore - aScore
       return 0 // preserve date order otherwise
     })
 
@@ -345,6 +354,7 @@ export default function Upcoming() {
                     onSave={handleSaveOnDeck}
                     onDismiss={handleDismiss}
                     isWishlist={isWishlistMatch(event.artist) || isWishlistMatch(event.title)}
+                    isPastArtist={isPastArtistMatch(event.artist) || isPastArtistMatch(event.title)}
                   />
                 ))}
               </div>

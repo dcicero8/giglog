@@ -159,7 +159,7 @@ app.get('/api/seatgeek/status', (req, res) => {
 app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
-  const cacheKey = 'seatgeek_la_concerts_60d_v3';
+  const cacheKey = 'seatgeek_la_concerts_60d_v4';
   const cached = db.prepare('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = ?').get(cacheKey);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
@@ -203,12 +203,28 @@ app.get('/api/seatgeek/events', async (req, res) => {
     const generalData = await generalRes.json();
     const generalEvents = (generalData.events || []).map(mapEvent);
 
-    // 2. Targeted searches for each wishlist artist (guarantees they appear)
+    // 2. Targeted searches for wishlist + past concert artists (guarantees they appear)
     const wishlistArtists = db.prepare('SELECT artist FROM wishlist').all();
-    const seenIds = new Set(generalEvents.map(e => e.id));
-    const wishlistEvents = [];
+    const pastArtists = db.prepare(
+      `SELECT DISTINCT artist FROM concerts
+       WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)`
+    ).all();
 
-    for (const { artist } of wishlistArtists) {
+    // Deduplicate: build a unique set of artist names to search
+    const searchedNames = new Set();
+    const artistsToSearch = [];
+    for (const { artist } of [...wishlistArtists, ...pastArtists]) {
+      const key = artist.toLowerCase().trim();
+      if (!searchedNames.has(key)) {
+        searchedNames.add(key);
+        artistsToSearch.push(artist);
+      }
+    }
+
+    const seenIds = new Set(generalEvents.map(e => e.id));
+    const targetedEvents = [];
+
+    for (const artist of artistsToSearch) {
       try {
         const artistParams = new URLSearchParams({ ...baseParams, 'per_page': '10', 'q': artist });
         const artistRes = await fetch(`https://api.seatgeek.com/2/events?${artistParams}`);
@@ -217,17 +233,19 @@ app.get('/api/seatgeek/events', async (req, res) => {
           for (const e of (artistData.events || [])) {
             if (!seenIds.has(e.id)) {
               seenIds.add(e.id);
-              wishlistEvents.push(mapEvent(e));
+              targetedEvents.push(mapEvent(e));
             }
           }
         }
       } catch (err) {
-        console.error(`SeatGeek wishlist search failed for "${artist}":`, err.message);
+        console.error(`SeatGeek targeted search failed for "${artist}":`, err.message);
       }
     }
 
+    console.log(`SeatGeek: ${generalEvents.length} general + ${targetedEvents.length} targeted (${artistsToSearch.length} artists searched: ${wishlistArtists.length} wishlist + ${pastArtists.length} past)`);
+
     // Combine and sort by date
-    const events = [...generalEvents, ...wishlistEvents].sort((a, b) =>
+    const events = [...generalEvents, ...targetedEvents].sort((a, b) =>
       (a.date || '').localeCompare(b.date || '')
     );
 
@@ -370,6 +388,15 @@ Return ONLY the JSON, no markdown, no explanation.`,
     console.error('Ticket parse error:', err);
     res.status(500).json({ error: 'Failed to parse ticket: ' + err.message });
   }
+});
+
+// Distinct artist names from past concerts (for On Deck "Seen Before" matching)
+app.get('/api/past-artists', (req, res) => {
+  const rows = db.prepare(
+    `SELECT DISTINCT artist FROM concerts
+     WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)`
+  ).all();
+  res.json(rows.map(r => r.artist));
 });
 
 // Ticket art generation (programmatic SVG — no AI needed)

@@ -1,21 +1,24 @@
-export default function OnDeckCard({ event, onSave, onDismiss, isWishlist }) {
+export default function OnDeckCard({ event, onSave, onDismiss, isWishlist, isPastArtist }) {
   const formattedDate = event.date
     ? new Date(event.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     : ''
 
+  // Determine card style: wishlist > past artist > default
+  const cardClass = isWishlist
+    ? 'bg-warning/10 border-2 border-warning/50 hover:border-warning hover:shadow-[0_0_30px_rgba(251,191,36,0.15)]'
+    : isPastArtist
+      ? 'bg-secondary/5 border-2 border-secondary/30 hover:border-secondary/60 hover:shadow-[0_0_25px_rgba(167,139,250,0.12)]'
+      : 'bg-bg-card/50 border border-border/60 hover:bg-bg-card hover:border-border-hover hover:shadow-[0_0_25px_rgba(167,139,250,0.06)]'
+
   return (
-    <div className={`rounded-xl overflow-hidden transition-all duration-300 group ${
-      isWishlist
-        ? 'bg-warning/10 border-2 border-warning/50 hover:border-warning hover:shadow-[0_0_30px_rgba(251,191,36,0.15)]'
-        : 'bg-bg-card/50 border border-border/60 hover:bg-bg-card hover:border-border-hover hover:shadow-[0_0_25px_rgba(167,139,250,0.06)]'
-    }`}>
+    <div className={`rounded-xl overflow-hidden transition-all duration-300 group ${cardClass}`}>
       {/* Performer image */}
       {event.image && (
         <div className="h-28 overflow-hidden relative">
           <img
             src={event.image}
             alt={event.artist}
-            className={`w-full h-full object-cover ${isWishlist ? 'opacity-90' : 'opacity-70'}`}
+            className={`w-full h-full object-cover ${isWishlist ? 'opacity-90' : isPastArtist ? 'opacity-85' : 'opacity-70'}`}
           />
           {/* Dismiss button - top right of image */}
           {onDismiss && (
@@ -34,6 +37,11 @@ export default function OnDeckCard({ event, onSave, onDismiss, isWishlist }) {
         {isWishlist && (
           <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-warning/20 text-warning mb-2">
             ★ Wishlist
+          </span>
+        )}
+        {!isWishlist && isPastArtist && (
+          <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-secondary/15 text-secondary mb-2">
+            ↻ Seen Before
           </span>
         )}
         <div className="flex items-start justify-between gap-1">
