@@ -17,7 +17,9 @@ const rateLimiter = {
     const today = new Date().toISOString().split('T')[0];
     const usage = db.prepare('SELECT request_count FROM api_usage WHERE date = ?').get(today);
     const dailyCount = usage ? usage.request_count : 0;
-    return this.tokens >= 1 && dailyCount < 1440;
+    if (dailyCount >= 1440) return { allowed: false, reason: 'daily_limit', used: dailyCount, limit: 1440 };
+    if (this.tokens < 1) return { allowed: false, reason: 'throttle' };
+    return { allowed: true };
   },
 
   consumeToken() {
@@ -50,12 +52,27 @@ function setCache(cacheKey, data, ttlHours) {
   ).run(cacheKey, JSON.stringify(data), `+${ttlHours} hours`);
 }
 
+function getRateLimitResetInfo() {
+  // Daily limit resets at midnight UTC
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(0, 0, 0, 0);
+  const msUntilReset = tomorrow - now;
+  const hoursLeft = Math.floor(msUntilReset / (1000 * 60 * 60));
+  const minsLeft = Math.floor((msUntilReset % (1000 * 60 * 60)) / (1000 * 60));
+  return { hoursLeft, minsLeft, resetAt: tomorrow.toISOString() };
+}
+
 async function fetchSetlistFm(endpoint) {
   const apiKey = process.env.SETLISTFM_API_KEY;
   if (!apiKey) throw new Error('SETLISTFM_API_KEY not configured');
 
-  if (!rateLimiter.canMakeRequest()) {
-    throw new Error('RATE_LIMITED');
+  const check = rateLimiter.canMakeRequest();
+  if (!check.allowed) {
+    const err = new Error('RATE_LIMITED');
+    err.rateLimitInfo = check;
+    throw err;
   }
 
   rateLimiter.consumeToken();
@@ -67,12 +84,46 @@ async function fetchSetlistFm(endpoint) {
     },
   });
 
+  if (response.status === 429) {
+    // setlist.fm's own rate limit
+    const retryAfter = response.headers.get('Retry-After');
+    const err = new Error('RATE_LIMITED');
+    err.rateLimitInfo = { reason: 'api_limit', retryAfter };
+    throw err;
+  }
+
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`setlist.fm API error: ${response.status} ${text}`);
   }
 
   return response.json();
+}
+
+function handleRateLimitError(res, err) {
+  const info = err.rateLimitInfo || {};
+  const reset = getRateLimitResetInfo();
+
+  if (info.reason === 'daily_limit') {
+    return res.status(429).json({
+      error: `Daily API limit reached (${info.used}/${info.limit} requests). Resets in ${reset.hoursLeft}h ${reset.minsLeft}m.`,
+      resetAt: reset.resetAt,
+      hoursLeft: reset.hoursLeft,
+      minsLeft: reset.minsLeft,
+    });
+  }
+
+  if (info.reason === 'api_limit') {
+    const retryMsg = info.retryAfter ? ` Try again in ${info.retryAfter} seconds.` : ' Try again in a few seconds.';
+    return res.status(429).json({
+      error: `setlist.fm rate limit hit.${retryMsg}`,
+    });
+  }
+
+  // Throttle (per-second token bucket)
+  return res.status(429).json({
+    error: 'Too many requests — try again in a few seconds.',
+  });
 }
 
 // Search setlists by artist and optional date
@@ -97,7 +148,7 @@ router.get('/search', async (req, res) => {
     res.json({ ...data, cached: false });
   } catch (err) {
     if (err.message === 'RATE_LIMITED') {
-      return res.status(429).json({ error: 'Rate limit reached. Try again later.' });
+      return handleRateLimitError(res, err);
     }
     res.status(500).json({ error: err.message });
   }
@@ -115,7 +166,7 @@ router.get('/setlist/:id', async (req, res) => {
     res.json({ ...data, cached: false });
   } catch (err) {
     if (err.message === 'RATE_LIMITED') {
-      return res.status(429).json({ error: 'Rate limit reached. Try again later.' });
+      return handleRateLimitError(res, err);
     }
     res.status(500).json({ error: err.message });
   }
@@ -136,7 +187,7 @@ router.get('/artists', async (req, res) => {
     res.json({ ...data, cached: false });
   } catch (err) {
     if (err.message === 'RATE_LIMITED') {
-      return res.status(429).json({ error: 'Rate limit reached. Try again later.' });
+      return handleRateLimitError(res, err);
     }
     res.status(500).json({ error: err.message });
   }
@@ -203,7 +254,7 @@ router.get('/festival/:id', async (req, res) => {
     res.json({ ...festivalData, cached: false });
   } catch (err) {
     if (err.message === 'RATE_LIMITED') {
-      return res.status(429).json({ error: 'Rate limit reached. Try again later.' });
+      return handleRateLimitError(res, err);
     }
     res.status(500).json({ error: err.message });
   }

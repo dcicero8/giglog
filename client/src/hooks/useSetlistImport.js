@@ -85,6 +85,7 @@ export function useSetlistImport() {
       setSetlistUrl('')
       return data
     } catch (err) {
+      // The server now returns detailed rate limit messages, so just pass through
       setError(err.message)
       return null
     } finally {

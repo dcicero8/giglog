@@ -83,7 +83,14 @@ export default function SetlistViewer({ concert, onLink }) {
   return (
     <div className="p-4 rounded-lg bg-bg-input border border-border h-full overflow-y-auto">
       {loading && <p className="text-text-muted text-sm">Searching setlist.fm...</p>}
-      {error && <p className="text-accent text-sm">{error}</p>}
+      {error && (
+        <div className={`text-sm rounded-lg p-3 ${error.includes('limit') || error.includes('429') ? 'bg-warning/10 border border-warning/20 text-warning' : 'text-accent'}`}>
+          <p>{error}</p>
+          {(error.includes('limit') || error.includes('429')) && (
+            <p className="text-xs mt-1 opacity-75">Cached setlists still work — only new lookups are paused.</p>
+          )}
+        </div>
+      )}
 
       {searchResults && (
         <div>

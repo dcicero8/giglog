@@ -128,4 +128,33 @@ for (const sql of migrations) {
   try { db.exec(sql); } catch { /* column already exists */ }
 }
 
+// One-time cleanup: null out setlist_fm_id for concerts whose cached setlist has no songs
+// This fixes festival children that were imported before the hasSongs check was added
+(() => {
+  const rows = db.prepare(
+    "SELECT id, setlist_fm_id FROM concerts WHERE setlist_fm_id IS NOT NULL AND parent_concert_id IS NOT NULL"
+  ).all();
+
+  let cleaned = 0;
+  for (const row of rows) {
+    const cached = db.prepare("SELECT response FROM setlist_cache WHERE cache_key = ?").get(`setlist:${row.setlist_fm_id}`);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached.response);
+        const hasSongs = data.sets?.set?.some(s => s.song?.length > 0) || false;
+        if (!hasSongs) {
+          db.prepare("UPDATE concerts SET setlist_fm_id = NULL, setlist_fm_url = NULL WHERE id = ?").run(row.id);
+          cleaned++;
+        }
+      } catch { /* skip invalid cache entries */ }
+    } else {
+      // No cache entry means we haven't verified this setlist has songs —
+      // since the old import code stored setlist_fm_id regardless, null it out
+      db.prepare("UPDATE concerts SET setlist_fm_id = NULL, setlist_fm_url = NULL WHERE id = ?").run(row.id);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) console.log(`[startup] Cleaned ${cleaned} festival act(s) with empty/missing setlist data`);
+})();
+
 export default db;

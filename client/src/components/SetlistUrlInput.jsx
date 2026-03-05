@@ -66,7 +66,11 @@ export default function SetlistUrlInput({ url, onUrlChange, altUrl, onAltUrlChan
         </div>
       )}
 
-      {error && <p className="text-xs text-accent mt-2">{error}</p>}
+      {error && (
+        <p className={`text-xs mt-2 ${error.includes('limit') || error.includes('429') ? 'text-warning' : 'text-accent'}`}>
+          {error}
+        </p>
+      )}
     </div>
   )
 }
