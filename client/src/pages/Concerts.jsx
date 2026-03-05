@@ -198,9 +198,9 @@ export default function Concerts() {
 
       {/* Scan error */}
       {scanError && (
-        <div className="mb-4 p-3 bg-accent/10 border border-accent/20 rounded-lg flex items-center justify-between">
-          <span className="text-sm text-accent">{scanError}</span>
-          <button onClick={() => setScanError(null)} className="text-xs text-text-dim hover:text-text bg-transparent border-0 cursor-pointer">Dismiss</button>
+        <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${scanError.includes('quota') || scanError.includes('limit') ? 'bg-warning/10 border border-warning/20' : 'bg-accent/10 border border-accent/20'}`}>
+          <span className={`text-sm ${scanError.includes('quota') || scanError.includes('limit') ? 'text-warning' : 'text-accent'}`}>{scanError}</span>
+          <button onClick={() => setScanError(null)} className="text-xs text-text-dim hover:text-text bg-transparent border-0 cursor-pointer ml-3 shrink-0">Dismiss</button>
         </div>
       )}
 

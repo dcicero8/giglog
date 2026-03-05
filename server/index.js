@@ -280,9 +280,17 @@ Return ONLY the JSON, no markdown, no explanation.`,
       }
     );
 
+    if (response.status === 429) {
+      throw new Error('Gemini API quota exceeded — the free tier limit resets daily. Try again tomorrow or upgrade your Gemini API plan.');
+    }
+
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error?.message || `Gemini API returned ${response.status}`);
+      const msg = errData.error?.message || '';
+      if (msg.includes('quota') || msg.includes('exceeded') || msg.includes('rate')) {
+        throw new Error('Gemini API quota exceeded — the free tier limit resets daily. Try again tomorrow or upgrade your Gemini API plan.');
+      }
+      throw new Error(msg || `Gemini API returned ${response.status}`);
     }
 
     const data = await response.json();
