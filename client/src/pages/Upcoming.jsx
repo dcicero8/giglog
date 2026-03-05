@@ -311,7 +311,7 @@ export default function Upcoming() {
                 <p className="text-text-muted text-sm">
                   {dismissedArtists.size > 0
                     ? `All events hidden · ${dismissedArtists.size} artist${dismissedArtists.size !== 1 ? 's' : ''} dismissed`
-                    : 'No concerts found in the LA area for the next 30 days'
+                    : 'No concerts found in the LA area for the next 60 days'
                   }
                 </p>
               </div>

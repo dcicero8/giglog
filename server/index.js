@@ -164,7 +164,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
 
   try {
     const today = new Date().toISOString().split('T')[0];
-    const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const future = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const params = new URLSearchParams({
       'lat': '34.0522',
       'lon': '-118.2437',
