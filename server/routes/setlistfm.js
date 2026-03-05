@@ -195,6 +195,7 @@ router.get('/festival/:id', async (req, res) => {
         setlist_fm_id: s.id,
         setlist_fm_url: s.url || '',
         hasSongs: s.sets?.set?.some(set => set.song?.length > 0) || false,
+        tour: s.tour?.name || '',
       })),
     };
 

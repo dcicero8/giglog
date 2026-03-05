@@ -72,12 +72,12 @@ router.get('/:id', (req, res) => {
 
 // Create concert
 router.post('/', (req, res) => {
-  const { artist, venue, city, date, price, rating, notes, last_minute, setlist_fm_id, setlist_fm_url, youtube_url, youtube_match, parent_concert_id, display_order } = req.body;
+  const { artist, venue, city, date, price, rating, notes, last_minute, setlist_fm_id, setlist_fm_url, youtube_url, youtube_match, parent_concert_id, display_order, tour_name, end_date } = req.body;
   if (!artist) return res.status(400).json({ error: 'artist is required' });
 
   const result = db.prepare(
-    'INSERT INTO concerts (artist, venue, city, date, price, rating, notes, last_minute, setlist_fm_id, setlist_fm_url, youtube_url, youtube_match, parent_concert_id, display_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(artist, venue || null, city || null, date || null, price || null, rating || null, notes || null, last_minute ? 1 : 0, setlist_fm_id || null, setlist_fm_url || null, youtube_url || null, youtube_match || null, parent_concert_id || null, display_order || 0);
+    'INSERT INTO concerts (artist, venue, city, date, price, rating, notes, last_minute, setlist_fm_id, setlist_fm_url, youtube_url, youtube_match, parent_concert_id, display_order, tour_name, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(artist, venue || null, city || null, date || null, price || null, rating || null, notes || null, last_minute ? 1 : 0, setlist_fm_id || null, setlist_fm_url || null, youtube_url || null, youtube_match || null, parent_concert_id || null, display_order || 0, tour_name || null, end_date || null);
 
   const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(concert);
@@ -88,10 +88,10 @@ router.put('/:id', (req, res) => {
   const existing = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Concert not found' });
 
-  const { artist, venue, city, date, price, rating, notes, last_minute, setlist_fm_id, setlist_fm_url, youtube_url, youtube_match } = req.body;
+  const { artist, venue, city, date, price, rating, notes, last_minute, setlist_fm_id, setlist_fm_url, youtube_url, youtube_match, tour_name, end_date } = req.body;
 
   db.prepare(
-    'UPDATE concerts SET artist = ?, venue = ?, city = ?, date = ?, price = ?, rating = ?, notes = ?, last_minute = ?, setlist_fm_id = ?, setlist_fm_url = ?, youtube_url = ?, youtube_match = ? WHERE id = ?'
+    'UPDATE concerts SET artist = ?, venue = ?, city = ?, date = ?, price = ?, rating = ?, notes = ?, last_minute = ?, setlist_fm_id = ?, setlist_fm_url = ?, youtube_url = ?, youtube_match = ?, tour_name = ?, end_date = ? WHERE id = ?'
   ).run(
     artist ?? existing.artist,
     venue ?? existing.venue,
@@ -105,6 +105,8 @@ router.put('/:id', (req, res) => {
     setlist_fm_url ?? existing.setlist_fm_url,
     youtube_url !== undefined ? (youtube_url || null) : existing.youtube_url,
     youtube_match !== undefined ? (youtube_match || null) : existing.youtube_match,
+    tour_name !== undefined ? (tour_name || null) : existing.tour_name,
+    end_date !== undefined ? (end_date || null) : existing.end_date,
     req.params.id
   );
 

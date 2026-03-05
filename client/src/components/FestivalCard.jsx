@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { api } from '../lib/api'
 import { getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 
-export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onViewBandSetlist, activeBandId }) {
+export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onViewBandSetlist, activeBandId, onAddDay }) {
   const [expanded, setExpanded] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [reordering, setReordering] = useState(false)
@@ -10,9 +10,51 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
   const children = concert.children || []
   const year = concert.date ? new Date(concert.date + 'T00:00:00').getFullYear() : ''
-  const formattedDate = concert.date
-    ? new Date(concert.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
-    : ''
+
+  // Multi-day support: check if children have different dates
+  const isMultiDay = useMemo(() => {
+    if (concert.end_date && concert.end_date !== concert.date) return true
+    const dates = new Set(children.map(c => c.date).filter(Boolean))
+    return dates.size > 1
+  }, [concert, children])
+
+  // Group children by date for multi-day display
+  const groupedChildren = useMemo(() => {
+    if (!isMultiDay) return null
+    const groups = new Map()
+    children.forEach((child, idx) => {
+      const key = child.date || concert.date || 'unknown'
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push({ child, originalIndex: idx })
+    })
+    // Sort groups by date
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))
+  }, [isMultiDay, children, concert.date])
+
+  // Format date range for header
+  const formattedDate = useMemo(() => {
+    if (!concert.date) return ''
+    const startDate = new Date(concert.date + 'T00:00:00')
+    if (isMultiDay) {
+      const endDateStr = concert.end_date || (() => {
+        const childDates = children.map(c => c.date).filter(Boolean).sort()
+        return childDates[childDates.length - 1] || concert.date
+      })()
+      if (endDateStr && endDateStr !== concert.date) {
+        const endDate = new Date(endDateStr + 'T00:00:00')
+        const startMonth = startDate.toLocaleDateString('en-US', { month: 'short' })
+        const endMonth = endDate.toLocaleDateString('en-US', { month: 'short' })
+        const startDay = startDate.getDate()
+        const endDay = endDate.getDate()
+        const yr = startDate.getFullYear()
+        if (startMonth === endMonth) {
+          return `${startMonth} ${startDay}–${endDay}, ${yr}`
+        }
+        return `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${yr}`
+      }
+    }
+    return startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
+  }, [concert.date, concert.end_date, isMultiDay, children])
 
   const handleTicketUpload = async (e) => {
     const file = e.target.files?.[0]
@@ -71,6 +113,102 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
     onUpdate?.({ ...concert, children: updatedChildren })
   }
 
+  const formatDayHeader = (dateStr, dayNum) => {
+    const d = new Date(dateStr + 'T00:00:00')
+    return `Day ${dayNum} — ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`
+  }
+
+  const renderBandRow = (child, index) => (
+    <div key={child.id}>
+      <div className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-bg-card-hover transition-colors group">
+        {/* Reorder arrows */}
+        <div className="flex flex-col gap-0 shrink-0">
+          <button
+            onClick={() => moveChild(index, -1)}
+            disabled={index === 0 || reordering}
+            className="text-[10px] text-text-dim hover:text-text bg-transparent border-0 cursor-pointer p-0 leading-none disabled:opacity-20 disabled:cursor-not-allowed"
+            title="Move up"
+          >
+            ▲
+          </button>
+          <button
+            onClick={() => moveChild(index, 1)}
+            disabled={index === children.length - 1 || reordering}
+            className="text-[10px] text-text-dim hover:text-text bg-transparent border-0 cursor-pointer p-0 leading-none disabled:opacity-20 disabled:cursor-not-allowed"
+            title="Move down"
+          >
+            ▼
+          </button>
+        </div>
+
+        {/* Order number */}
+        <span className="text-xs text-text-dim w-5 text-right shrink-0">{index + 1}.</span>
+
+        {/* Band name + tour */}
+        <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+          {child.setlist_fm_id ? (
+            <button
+              onClick={() => onViewBandSetlist?.(activeBandId === child.id ? null : child)}
+              className={`text-left text-sm transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium ${
+                activeBandId === child.id ? 'text-accent' : 'text-text hover:text-accent'
+              }`}
+              title={activeBandId === child.id ? 'Hide setlist' : 'View setlist'}
+            >
+              {child.artist}
+            </button>
+          ) : (
+            <span className="text-left text-sm text-text p-0 truncate font-medium">
+              {child.artist}
+            </span>
+          )}
+          {child.tour_name && (
+            <span className="text-[10px] text-text-dim/60 italic shrink-0 whitespace-nowrap">
+              {child.tour_name}
+            </span>
+          )}
+        </div>
+
+        {/* Setlist indicator */}
+        {child.setlist_fm_id ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onViewBandSetlist?.(activeBandId === child.id ? null : child) }}
+            className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 border-0 cursor-pointer transition-colors font-medium ${
+              activeBandId === child.id
+                ? 'text-success bg-success/30 ring-1 ring-success/40'
+                : 'text-success bg-success/10 hover:bg-success/20'
+            }`}
+          >
+            setlist
+          </button>
+        ) : (
+          <span className="text-[10px] text-text-dim/40 px-1.5 py-0.5 rounded-full bg-white/5 shrink-0">setlist</span>
+        )}
+
+        {/* Quick links - visible on hover */}
+        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <a
+            href={getYouTubeExactShowUrl(child.artist, concert.venue, year)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-1.5 py-0.5 text-[10px] rounded bg-[#ff0000]/10 text-[#ff4444] hover:bg-[#ff0000]/20 transition-colors no-underline"
+            title="Search YouTube"
+          >
+            ▶
+          </a>
+          <a
+            href={getSpotifyArtistUrl(child.artist)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-1.5 py-0.5 text-[10px] rounded bg-[#1db954]/10 text-[#1db954] hover:bg-[#1db954]/20 transition-colors no-underline"
+            title="Search Spotify"
+          >
+            ♫
+          </a>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="bg-bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:border-border-hover hover:shadow-[0_0_25px_rgba(255,60,100,0.08)]">
       {/* Ticket Image */}
@@ -114,14 +252,14 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
         <div className="flex items-center gap-3 text-sm text-text-muted mb-3">
           <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/20 text-warning">
-            Festival · {children.length} artist{children.length !== 1 ? 's' : ''}
+            {isMultiDay ? 'Multi-Day Festival' : 'Festival'} · {children.length} artist{children.length !== 1 ? 's' : ''}
           </span>
           {concert.last_minute === 1 && (
             <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/20 text-warning">Last-Minute</span>
           )}
         </div>
 
-        {/* Upload Ticket button */}
+        {/* Upload Ticket + Add Day buttons */}
         <div className="flex items-center gap-2 mb-4">
           <input
             ref={ticketFileRef}
@@ -137,6 +275,14 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
           >
             {uploading ? 'Uploading...' : concert.ticket_image ? '📷 Replace Image' : '📷 Upload Ticket'}
           </button>
+          {onAddDay && (
+            <button
+              onClick={() => onAddDay(concert.id)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-warning/10 text-warning hover:bg-warning/20 transition-colors border-0 cursor-pointer"
+            >
+              + Add Day
+            </button>
+          )}
         </div>
 
         {/* Expand/Collapse Band List */}
@@ -154,92 +300,29 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
         {/* Band Tree */}
         {expanded && (
-          <div className="mt-2 space-y-0.5">
-            {children.map((child, index) => (
-              <div key={child.id}>
-                <div className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-bg-card-hover transition-colors group">
-                  {/* Reorder arrows */}
-                  <div className="flex flex-col gap-0 shrink-0">
-                    <button
-                      onClick={() => moveChild(index, -1)}
-                      disabled={index === 0 || reordering}
-                      className="text-[10px] text-text-dim hover:text-text bg-transparent border-0 cursor-pointer p-0 leading-none disabled:opacity-20 disabled:cursor-not-allowed"
-                      title="Move up"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => moveChild(index, 1)}
-                      disabled={index === children.length - 1 || reordering}
-                      className="text-[10px] text-text-dim hover:text-text bg-transparent border-0 cursor-pointer p-0 leading-none disabled:opacity-20 disabled:cursor-not-allowed"
-                      title="Move down"
-                    >
-                      ▼
-                    </button>
-                  </div>
-
-                  {/* Order number */}
-                  <span className="text-xs text-text-dim w-5 text-right shrink-0">{index + 1}.</span>
-
-                  {/* Band name */}
-                  {child.setlist_fm_id ? (
-                    <button
-                      onClick={() => onViewBandSetlist?.(activeBandId === child.id ? null : child)}
-                      className={`flex-1 text-left text-sm transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium ${
-                        activeBandId === child.id ? 'text-accent' : 'text-text hover:text-accent'
-                      }`}
-                      title={activeBandId === child.id ? 'Hide setlist' : 'View setlist'}
-                    >
-                      {child.artist}
-                    </button>
-                  ) : (
-                    <span className="flex-1 text-left text-sm text-text p-0 truncate font-medium">
-                      {child.artist}
+          <div className="mt-2">
+            {isMultiDay && groupedChildren ? (
+              // Multi-day: group by date with day headers
+              groupedChildren.map(([dateStr, items], dayIdx) => (
+                <div key={dateStr}>
+                  <div className="flex items-center gap-2 mt-3 mb-1 px-3">
+                    <span className="text-[10px] font-semibold text-warning uppercase tracking-wider">
+                      {formatDayHeader(dateStr, dayIdx + 1)}
                     </span>
-                  )}
-
-                  {/* Setlist indicator */}
-                  {child.setlist_fm_id ? (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onViewBandSetlist?.(activeBandId === child.id ? null : child) }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 border-0 cursor-pointer transition-colors font-medium ${
-                        activeBandId === child.id
-                          ? 'text-success bg-success/30 ring-1 ring-success/40'
-                          : 'text-success bg-success/10 hover:bg-success/20'
-                      }`}
-                    >
-                      setlist
-                    </button>
-                  ) : (
-                    <span className="text-[10px] text-text-dim/40 px-1.5 py-0.5 rounded-full bg-white/5 shrink-0">setlist</span>
-                  )}
-
-                  {/* Quick links - visible on hover */}
-                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <a
-                      href={getYouTubeExactShowUrl(child.artist, concert.venue, year)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-1.5 py-0.5 text-[10px] rounded bg-[#ff0000]/10 text-[#ff4444] hover:bg-[#ff0000]/20 transition-colors no-underline"
-                      title="Search YouTube"
-                    >
-                      ▶
-                    </a>
-                    <a
-                      href={getSpotifyArtistUrl(child.artist)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-1.5 py-0.5 text-[10px] rounded bg-[#1db954]/10 text-[#1db954] hover:bg-[#1db954]/20 transition-colors no-underline"
-                      title="Search Spotify"
-                    >
-                      ♫
-                    </a>
+                    <div className="flex-1 border-t border-border/40" />
+                    <span className="text-[10px] text-text-dim">{items.length} artist{items.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {items.map(({ child, originalIndex }) => renderBandRow(child, originalIndex))}
                   </div>
                 </div>
-
-                {/* Setlist now renders to the RIGHT via parent layout */}
+              ))
+            ) : (
+              // Single-day: flat list
+              <div className="space-y-0.5">
+                {children.map((child, index) => renderBandRow(child, index))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>

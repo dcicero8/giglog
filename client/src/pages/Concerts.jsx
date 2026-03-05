@@ -10,7 +10,7 @@ import StarRating from '../components/StarRating'
 import Modal from '../components/Modal'
 import FestivalImportModal from '../components/FestivalImportModal'
 
-const emptyForm = { artist: '', venue: '', city: '', date: '', price: '', rating: 0, notes: '', last_minute: false }
+const emptyForm = { artist: '', venue: '', city: '', date: '', end_date: '', price: '', rating: 0, notes: '', last_minute: false }
 
 export default function Concerts() {
   const [concerts, setConcerts] = useState([])
@@ -27,6 +27,7 @@ export default function Concerts() {
   const aiAvailable = aiStatus?.available ?? false
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: setlistLoading, error: setlistError, setError: setSetlistError, importUrl, importFestival } = useSetlistImport()
   const [festivalData, setFestivalData] = useState(null)
+  const [addDayFestivalId, setAddDayFestivalId] = useState(null) // festival ID to add a day to
 
   const fetchConcerts = useCallback(async () => {
     setLoading(true)
@@ -58,10 +59,12 @@ export default function Concerts() {
       venue: concert.venue || '',
       city: concert.city || '',
       date: concert.date || '',
+      end_date: concert.end_date || '',
       price: concert.price ?? '',
       rating: concert.rating || 0,
       notes: concert.notes || '',
       last_minute: !!concert.last_minute,
+      _isFestival: !!concert.children?.length,
     })
     setEditId(concert.id)
     setModalOpen(true)
@@ -69,12 +72,14 @@ export default function Concerts() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const { _isFestival, ...formFields } = form
     const data = {
-      ...form,
+      ...formFields,
       price: form.price ? parseFloat(form.price) : null,
       last_minute: form.last_minute,
       setlist_fm_id: form.setlist_fm_id || null,
       setlist_fm_url: form.setlist_fm_url || null,
+      end_date: form.end_date || null,
     }
     if (editId) {
       await api.put(`/concerts/${editId}`, data)
@@ -107,6 +112,19 @@ export default function Concerts() {
     }
   }
 
+  const handleAddDay = (festivalId) => {
+    setAddDayFestivalId(festivalId)
+    // Scroll to the setlist URL input
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleAddDayImport = async () => {
+    const result = await importFestival()
+    if (result) {
+      setFestivalData(result)
+    }
+  }
+
   const handleSetlistLink = async (concertId, setlistFmId) => {
     await api.put(`/concerts/${concertId}`, { setlist_fm_id: setlistFmId })
     fetchConcerts()
@@ -124,6 +142,21 @@ export default function Concerts() {
         </button>
       </div>
 
+      {/* Add Day banner */}
+      {addDayFestivalId && (
+        <div className="mb-3 p-3 bg-warning/10 border border-warning/20 rounded-lg flex items-center justify-between">
+          <span className="text-sm text-warning font-medium">
+            Adding a day to festival — paste the setlist.fm Festival URL below and click Import Festival
+          </span>
+          <button
+            onClick={() => setAddDayFestivalId(null)}
+            className="text-xs text-text-dim hover:text-text bg-transparent border-0 cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Quick add from setlist.fm URL */}
       <div className="mb-6">
         <SetlistUrlInput
@@ -132,7 +165,7 @@ export default function Concerts() {
           altUrl={altSetlistUrl}
           onAltUrlChange={setAltSetlistUrl}
           onImport={importFromSetlistUrl}
-          onFestivalImport={handleFestivalImport}
+          onFestivalImport={addDayFestivalId ? handleAddDayImport : handleFestivalImport}
           loading={setlistLoading}
           error={setlistError}
           onClearError={() => setSetlistError(null)}
@@ -206,6 +239,7 @@ export default function Concerts() {
                             else setFestivalBandSetlist(null)
                           }}
                           activeBandId={festivalBandSetlist?.child?.id}
+                          onAddDay={handleAddDay}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -227,6 +261,7 @@ export default function Concerts() {
                         else setFestivalBandSetlist(null)
                       }}
                       activeBandId={null}
+                      onAddDay={handleAddDay}
                     />
                   )
                 ) : isSetlistOpen ? (
@@ -269,8 +304,9 @@ export default function Concerts() {
       {festivalData && (
         <FestivalImportModal
           data={festivalData}
-          onClose={() => setFestivalData(null)}
-          onComplete={fetchConcerts}
+          onClose={() => { setFestivalData(null); setAddDayFestivalId(null) }}
+          onComplete={() => { fetchConcerts(); setAddDayFestivalId(null) }}
+          existingFestivalId={addDayFestivalId}
         />
       )}
 
@@ -311,9 +347,9 @@ export default function Concerts() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${form._isFestival ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <div>
-              <label className="block text-sm text-text-muted mb-1">Date</label>
+              <label className="block text-sm text-text-muted mb-1">{form._isFestival ? 'Start Date' : 'Date'}</label>
               <input
                 type="date"
                 value={form.date}
@@ -321,6 +357,17 @@ export default function Concerts() {
                 className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
               />
             </div>
+            {form._isFestival && (
+              <div>
+                <label className="block text-sm text-text-muted mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={form.end_date}
+                  onChange={e => setForm({ ...form, end_date: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm text-text-muted mb-1">Price</label>
               <input
