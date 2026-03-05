@@ -83,8 +83,11 @@ app.get('/api/stats', (req, res) => {
 
 // Artists aggregate endpoint
 app.get('/api/artists', (req, res) => {
+  // Exclude festival parent entries (they're containers like "Lollapalooza", not real artists)
+  // A festival parent is a concert that has children pointing to it
   const artists = db.prepare(`
     SELECT artist, 'concert' as source, date, price, rating FROM concerts
+      WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
     UNION ALL
     SELECT artist, 'upcoming' as source, date, price, NULL as rating FROM upcoming
     UNION ALL
