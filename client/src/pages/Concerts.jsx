@@ -284,7 +284,7 @@ export default function Concerts() {
             return (
               <div
                 key={concert.id}
-                className={((isSetlistOpen && !(concert.ticket_art_svg || concert.ticket_image)) || isFestivalSetlistOpen) ? 'md:col-span-2 lg:col-span-2' : ''}
+                className={isFestivalSetlistOpen ? 'md:col-span-2 lg:col-span-2' : ''}
               >
                 {concert.children?.length > 0 ? (
                   festivalBandSetlist?.festivalId === concert.id ? (
@@ -326,29 +326,7 @@ export default function Concerts() {
                       onAddDay={handleAddDay}
                     />
                   )
-                ) : isSetlistOpen && !(concert.ticket_art_svg || concert.ticket_image) ? (
-                  /* No ticket art — use side-by-side setlist panel */
-                  <div className="flex gap-4 items-stretch">
-                    <div className="flex-1 min-w-0">
-                      <ConcertCard
-                        concert={concert}
-                        onEdit={openEdit}
-                        onDelete={handleDelete}
-                        onViewSetlist={() => setSetlistConcert(null)}
-                        aiAvailable={aiAvailable}
-                        onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
-                        setlistOpen
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <SetlistViewer
-                        concert={concert}
-                        onLink={(setlistFmId) => handleSetlistLink(concert.id, setlistFmId)}
-                      />
-                    </div>
-                  </div>
                 ) : (
-                  /* Has ticket art — setlist shows via flip, or normal card */
                   <ConcertCard
                     concert={concert}
                     onEdit={openEdit}

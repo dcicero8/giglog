@@ -322,6 +322,13 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
         <p className="text-sm text-text-muted mb-3 line-clamp-2">{concert.notes}</p>
       )}
 
+      {/* Inline setlist for cards without ticket art (no flip available) */}
+      {setlistOpen && !(concert.ticket_image || concert.ticket_art_svg) && (
+        <div className="mb-3 rounded-lg bg-[#f5f0e6] border border-[#d4c9a8] p-4">
+          <SetlistBack concert={concert} />
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2 mt-auto pt-2 border-t border-border">
         <button
           onClick={() => setShowEbay(!showEbay)}
