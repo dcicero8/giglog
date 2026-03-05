@@ -11,6 +11,7 @@ import ConcertMap from './pages/ConcertMap'
 import Artists from './pages/Artists'
 import Settings from './pages/Settings'
 import Collection from './pages/Collection'
+import Songs from './pages/Songs'
 
 const router = createBrowserRouter([
   {
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
       { path: 'wishlist', element: <Wishlist /> },
       { path: 'map', element: <ConcertMap /> },
       { path: 'artists', element: <Artists /> },
+      { path: 'songs', element: <Songs /> },
       { path: 'collection', element: <Collection /> },
       { path: 'settings', element: <Settings /> },
     ],

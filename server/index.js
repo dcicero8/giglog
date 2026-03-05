@@ -10,6 +10,7 @@ import concertsRouter from './routes/concerts.js';
 import upcomingRouter from './routes/upcoming.js';
 import wishlistRouter from './routes/wishlist.js';
 import setlistfmRouter from './routes/setlistfm.js';
+import songsRouter from './routes/songs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -55,6 +56,7 @@ app.use('/api/concerts', concertsRouter);
 app.use('/api/upcoming', upcomingRouter);
 app.use('/api/wishlist', wishlistRouter);
 app.use('/api/setlistfm', setlistfmRouter);
+app.use('/api/songs', songsRouter);
 
 // Stats endpoint for dashboard
 // Count children (individual bands) as shows, but not festival parents themselves
