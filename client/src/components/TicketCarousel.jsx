@@ -25,7 +25,6 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
     )
   }
 
-  // For 1-2 tickets, show a simpler layout
   if (count <= 2) {
     return (
       <div className="flex justify-center gap-6 py-8">
@@ -38,109 +37,108 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
     )
   }
 
-  // ── Coverflow-style 3D carousel ──
+  // ── Cylindrical 3D carousel with coverflow styling ──
+  // Radius so cards wrap around a cylinder — scales with count
+  const radius = Math.max(400, count * 50)
+  const anglePerCard = 360 / count
+
   const getStyle = (index) => {
     let offset = index - active
-    // Wrap around
     if (offset > count / 2) offset -= count
     if (offset < -count / 2) offset += count
 
+    const angle = offset * anglePerCard
+    const angleRad = (angle * Math.PI) / 180
+    const cosAngle = Math.cos(angleRad)
     const absOffset = Math.abs(offset)
 
-    // Only render visible cards (within 3 positions)
-    if (absOffset > 3) {
-      return { opacity: 0, pointerEvents: 'none', transform: 'scale(0)', position: 'absolute' }
+    // Hide cards that are behind the cylinder
+    if (cosAngle < -0.3) {
+      return { opacity: 0, pointerEvents: 'none', visibility: 'hidden' }
     }
 
-    // Center card: full size, flat, highest z
-    // Side cards: rotated, translated sideways, scaled down, dimmed
-    const rotateY = offset === 0 ? 0 : offset < 0 ? 35 : -35
-    const translateX = offset * 200
-    const translateZ = absOffset === 0 ? 60 : -absOffset * 80
-    const scale = absOffset === 0 ? 1.05 : Math.max(0.65, 0.85 - (absOffset - 1) * 0.1)
-    const opacity = absOffset === 0 ? 1 : Math.max(0.3, 0.8 - (absOffset - 1) * 0.25)
-    const brightness = absOffset === 0 ? 1 : Math.max(0.5, 0.7 - (absOffset - 1) * 0.1)
+    // Cylindrical transform: rotate around Y axis, then push out along Z
+    const scale = absOffset === 0 ? 1.08 : 0.85 + cosAngle * 0.15
+    const opacity = absOffset === 0 ? 1 : Math.max(0.2, 0.3 + cosAngle * 0.7)
+    const brightness = absOffset === 0 ? 1 : Math.max(0.45, 0.4 + cosAngle * 0.6)
 
     return {
-      transform: `translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${scale})`,
-      zIndex: 100 - absOffset * 10,
+      transform: `rotateY(${angle}deg) translateZ(${radius}px) scale(${scale})`,
+      zIndex: Math.round(100 + cosAngle * 100),
       opacity,
       filter: absOffset === 0 ? 'none' : `brightness(${brightness})`,
       transition: 'all 500ms cubic-bezier(0.4, 0, 0.2, 1)',
       pointerEvents: absOffset <= 1 ? 'auto' : 'none',
-      position: 'absolute',
     }
   }
 
   return (
     <div className="relative select-none">
-      {/* 3D coverflow scene */}
+      {/* 3D cylindrical scene */}
       <div
         className="relative flex items-center justify-center overflow-hidden"
-        style={{ perspective: 1000, perspectiveOrigin: '50% 40%', height: 260 }}
+        style={{ perspective: 900, perspectiveOrigin: '50% 45%', height: 260 }}
       >
-        {/* Reflective shelf surface */}
+        {/* Reflective shelf beneath */}
         <div
           className="absolute bottom-0 left-0 right-0 pointer-events-none"
           style={{
-            height: 80,
-            background: 'linear-gradient(to bottom, rgba(40,40,50,0.5) 0%, rgba(20,20,28,0.8) 40%, rgba(10,10,16,0.95) 100%)',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
+            height: 70,
+            background: 'linear-gradient(to bottom, rgba(40,40,50,0.4) 0%, rgba(20,20,28,0.7) 50%, rgba(10,10,16,0.9) 100%)',
+            borderTop: '1px solid rgba(255,255,255,0.05)',
             borderRadius: '0 0 16px 16px',
           }}
         />
 
-        {/* Faint reflection glow under center card */}
+        {/* Accent glow under active card */}
         <div
           className="absolute pointer-events-none"
           style={{
-            bottom: 10,
+            bottom: 8,
             left: '50%',
             transform: 'translateX(-50%)',
-            width: 280,
-            height: 40,
-            background: 'radial-gradient(ellipse, rgba(255,60,100,0.08) 0%, transparent 70%)',
-            filter: 'blur(8px)',
+            width: 260,
+            height: 30,
+            background: 'radial-gradient(ellipse, rgba(255,60,100,0.07) 0%, transparent 70%)',
+            filter: 'blur(10px)',
           }}
         />
 
-        {/* Cards container */}
+        {/* Cylinder container */}
         <div
           style={{
             transformStyle: 'preserve-3d',
             width: 340,
-            height: 200,
+            height: 150,
             position: 'relative',
           }}
         >
           {tickets.map((ticket, i) => {
             const style = getStyle(i)
-            if (style.opacity === 0 && style.pointerEvents === 'none') return null
+            if (style.visibility === 'hidden') return null
+
+            const isActive = i === active
 
             return (
               <div
                 key={`${ticket.type}-${ticket.id}`}
-                className="absolute left-0"
+                className="absolute top-0 left-0"
                 style={{
                   ...style,
-                  top: '50%',
-                  marginTop: -75,
-                  transformOrigin: 'center center',
                   backfaceVisibility: 'hidden',
                   cursor: 'pointer',
                 }}
                 onClick={() => {
-                  if (i === active) onTicketClick?.(ticket)
+                  if (isActive) onTicketClick?.(ticket)
                   else setActive(i)
                 }}
               >
-                {/* Card with subtle shadow */}
                 <div
                   className="rounded-xl overflow-hidden"
                   style={{
-                    boxShadow: i === active
-                      ? '0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)'
-                      : '0 4px 16px rgba(0,0,0,0.3)',
+                    boxShadow: isActive
+                      ? '0 8px 40px rgba(0,0,0,0.6), 0 2px 10px rgba(0,0,0,0.3)'
+                      : '0 4px 20px rgba(0,0,0,0.4)',
                   }}
                 >
                   <TicketStub ticket={ticket} />
@@ -160,7 +158,6 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
           ‹
         </button>
 
-        {/* Dots */}
         <div className="flex gap-1.5">
           {tickets.map((_, i) => (
             <button
