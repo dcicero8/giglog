@@ -576,14 +576,15 @@ function generateTicketArt(concert, style) {
   const venue = (concert.venue || 'VENUE').toUpperCase();
   const city = (concert.city || '').toUpperCase();
 
-  // Bold Ticketmaster-era color palettes — the color IS the ticket stock
+  // Bold Ticketmaster-era color palettes
+  // stub/banner = bold color stock, main body = white/cream paper
   const colorSchemes = {
-    blue:   { stock: '#5b8fbf', stockDk: '#3a6a9a', ink: '#0a1a30', inkLt: '#1a3050', accent: '#8cb8e0', faded: '#2a4a70', band: '#d8e8f4', bandAlt: '#a0c8e8', stub: '#4a7eae' },
-    gold:   { stock: '#c8a848', stockDk: '#a08830', ink: '#1a1400', inkLt: '#3a2e00', accent: '#e8d068', faded: '#5a4a18', band: '#f0e8c8', bandAlt: '#d8c878', stub: '#b09838' },
-    red:    { stock: '#c85848', stockDk: '#a03828', ink: '#1a0800', inkLt: '#3a1808', accent: '#e88878', faded: '#5a2018', band: '#f0d8d4', bandAlt: '#d89888', stub: '#b84838' },
-    green:  { stock: '#58a068', stockDk: '#388048', ink: '#001a08', inkLt: '#083a18', accent: '#88c898', faded: '#184a28', band: '#d4ecd8', bandAlt: '#88c098', stub: '#489058' },
-    purple: { stock: '#8868a8', stockDk: '#684888', ink: '#0a0018', inkLt: '#1a0838', accent: '#a888c8', faded: '#382858', band: '#e0d4ec', bandAlt: '#a088c0', stub: '#785898' },
-    teal:   { stock: '#488898', stockDk: '#286878', ink: '#001820', inkLt: '#082838', accent: '#78b0c0', faded: '#183848', band: '#c8e0e8', bandAlt: '#78b0c0', stub: '#387888' },
+    blue:   { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#5b8fbf', stockDk: '#3a6a9a', ink: '#0a1a30', inkLt: '#3a5068', accent: '#c8ddf0', faded: '#6888a8', band: '#d8e8f4', bandAlt: '#a0c8e8', stub: '#4a7eae', bannerText: '#c8ddf0' },
+    gold:   { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#c8a848', stockDk: '#a08830', ink: '#1a1400', inkLt: '#5a4a20', accent: '#f0e8c8', faded: '#8a7a38', band: '#f0e8c8', bandAlt: '#d8c878', stub: '#b09838', bannerText: '#f0e8c8' },
+    red:    { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#c85848', stockDk: '#a03828', ink: '#1a0800', inkLt: '#5a2818', accent: '#f0d8d4', faded: '#8a4838', band: '#f0d8d4', bandAlt: '#d89888', stub: '#b84838', bannerText: '#f0d8d4' },
+    green:  { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#58a068', stockDk: '#388048', ink: '#001a08', inkLt: '#184a28', accent: '#d4ecd8', faded: '#389048', band: '#d4ecd8', bandAlt: '#88c098', stub: '#489058', bannerText: '#d4ecd8' },
+    purple: { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#8868a8', stockDk: '#684888', ink: '#0a0018', inkLt: '#382858', accent: '#e0d4ec', faded: '#685888', band: '#e0d4ec', bandAlt: '#a088c0', stub: '#785898', bannerText: '#e0d4ec' },
+    teal:   { paper: '#f2ede6', paperDk: '#e0dbd2', stock: '#488898', stockDk: '#286878', ink: '#001820', inkLt: '#183848', accent: '#c8e0e8', faded: '#387888', band: '#c8e0e8', bandAlt: '#78b0c0', stub: '#387888', bannerText: '#c8e0e8' },
   };
 
   const styleKeys = Object.keys(colorSchemes);
@@ -611,10 +612,15 @@ function generateTicketArt(concert, style) {
   }
 
   const grainSeed = rNum(1, 9999);
-  const rot = (rNum(-3, 3) / 10).toFixed(1);
+  const rot = (rNum(-5, 5) / 10).toFixed(1);
   const stainX = rNum(150, 440);
   const stainY = rNum(40, 160);
+  const stain2X = rNum(200, 480);
+  const stain2Y = rNum(20, 180);
+  const stain3X = rNum(130, 350);
+  const stain3Y = rNum(50, 170);
   const ticketNum = `NTC${rNum(1000,9999)}${rNum(10000,99999)}`;
+  const foxingCount = rNum(3, 8); // small brown spots from aging
 
   // Artist font size — scale down for long names
   const artistSize = artist.length > 30 ? 18 : artist.length > 24 ? 22 : artist.length > 18 ? 26 : artist.length > 14 ? 30 : 36;
@@ -631,18 +637,40 @@ function generateTicketArt(concert, style) {
     perf += `<circle cx="${stubW + 6}" cy="${py}" r="1.5" fill="#0a0a0a"/>`;
   }
 
+  // Foxing spots (tiny brown dots that appear on old paper)
+  let foxing = '';
+  for (let f = 0; f < foxingCount; f++) {
+    const fx = rNum(mainX + 10, mainX + mainW - 10);
+    const fy = rNum(20, 185);
+    const fr = rNum(1, 3);
+    foxing += `<circle cx="${fx}" cy="${fy}" r="${fr}" fill="#a08050" opacity="${(rNum(3,8)/100).toFixed(2)}"/>`;
+  }
+
+  // Fold crease line (horizontal, subtle)
+  const creaseY = rNum(70, 130);
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 200">
   <defs>
     <filter id="grain" x="0%" y="0%" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" seed="${grainSeed}" result="noise"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="5" seed="${grainSeed}" result="noise"/>
+      <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
+      <feBlend in="SourceGraphic" in2="grayNoise" mode="multiply" result="grained"/>
+      <feComponentTransfer in="grained"><feFuncA type="linear" slope="1"/></feComponentTransfer>
+    </filter>
+    <filter id="heavyGrain" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="6" seed="${grainSeed + 1}" result="noise"/>
       <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
       <feBlend in="SourceGraphic" in2="grayNoise" mode="multiply" result="grained"/>
       <feComponentTransfer in="grained"><feFuncA type="linear" slope="1"/></feComponentTransfer>
     </filter>
     <filter id="age">
-      <feColorMatrix type="matrix" values="1.03 0.04 0 0 0.01  0 1.01 0 0 0.005  0 0 0.94 0 -0.01  0 0 0 1 0"/>
+      <feColorMatrix type="matrix" values="1.05 0.06 0.02 0 0.02  0.01 1.02 0.01 0 0.01  0 0.01 0.90 0 -0.02  0 0 0 1 0"/>
     </filter>
-    <filter id="scanned"><feGaussianBlur stdDeviation="0.25"/></filter>
+    <filter id="scanned"><feGaussianBlur stdDeviation="0.3"/></filter>
+    <filter id="worn">
+      <feTurbulence type="turbulence" baseFrequency="0.03" numOctaves="3" seed="${grainSeed + 2}" result="warp"/>
+      <feDisplacementMap in="SourceGraphic" in2="warp" scale="1.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
     <style>
       .tk-bold { font-family: 'Arial Black', 'Impact', Arial, sans-serif; font-weight: 900; }
       .tk-body { font-family: 'Arial Narrow', Arial, sans-serif; font-weight: 700; }
@@ -657,7 +685,9 @@ function generateTicketArt(concert, style) {
 
     <!-- ═══ LEFT STUB ═══ -->
     <rect x="6" y="6" width="${stubW}" height="188" rx="1" fill="${c.stub}"/>
-    <rect x="6" y="6" width="${stubW}" height="188" rx="1" filter="url(#grain)" opacity="0.08"/>
+    <rect x="6" y="6" width="${stubW}" height="188" rx="1" filter="url(#grain)" opacity="0.15"/>
+    <!-- Stub aging -->
+    <rect x="6" y="6" width="${stubW}" height="188" rx="1" fill="#d8c898" opacity="0.08"/>
 
     <!-- Stub top band -->
     <rect x="6" y="6" width="${stubW}" height="16" fill="${c.stockDk}"/>
@@ -698,16 +728,31 @@ function generateTicketArt(concert, style) {
     <!-- ═══ PERFORATION LINE ═══ -->
     ${perf}
 
-    <!-- ═══ MAIN TICKET BODY ═══ -->
-    <rect x="${mainX}" y="6" width="${mainW}" height="188" rx="1" fill="${c.stock}"/>
-    <rect x="${mainX}" y="6" width="${mainW}" height="188" rx="1" filter="url(#grain)" opacity="0.08"/>
+    <!-- ═══ MAIN TICKET BODY — white/cream paper ═══ -->
+    <rect x="${mainX}" y="6" width="${mainW}" height="188" rx="1" fill="${c.paper}"/>
+    <!-- Paper grain texture -->
+    <rect x="${mainX}" y="6" width="${mainW}" height="188" rx="1" filter="url(#heavyGrain)" opacity="0.12"/>
+    <!-- Yellowing around edges -->
+    <rect x="${mainX}" y="6" width="20" height="188" fill="#d8c898" opacity="0.10"/>
+    <rect x="${mainX + mainW - 20}" y="6" width="20" height="188" fill="#d8c898" opacity="0.08"/>
+    <rect x="${mainX}" y="6" width="${mainW}" height="18" fill="#d8c898" opacity="0.06"/>
+    <rect x="${mainX}" y="176" width="${mainW}" height="18" fill="#d8c898" opacity="0.08"/>
 
-    <!-- Age stain -->
-    <circle cx="${stainX}" cy="${stainY}" r="${rNum(20,45)}" fill="#c8a860" opacity="0.05"/>
+    <!-- Age stains — multiple -->
+    <circle cx="${stainX}" cy="${stainY}" r="${rNum(25,50)}" fill="#c8a860" opacity="0.07"/>
+    <circle cx="${stain2X}" cy="${stain2Y}" r="${rNum(15,35)}" fill="#b89848" opacity="0.05"/>
+    <circle cx="${stain3X}" cy="${stain3Y}" r="${rNum(10,25)}" fill="#d0b870" opacity="0.04"/>
 
-    <!-- Top banner: NO REFUNDS -->
-    <rect x="${mainX}" y="6" width="${mainW}" height="14" fill="${c.stockDk}"/>
-    <text x="${mainCx}" y="15.5" text-anchor="middle" class="tk-body" font-size="5" fill="${c.accent}" letter-spacing="2">NO REFUNDS / EXCHANGES · SERVICE CHARGES NOT REFUNDABLE</text>
+    <!-- Foxing spots -->
+    ${foxing}
+
+    <!-- Fold crease -->
+    <line x1="${mainX}" y1="${creaseY}" x2="${mainX + mainW}" y2="${creaseY}" stroke="#a09070" stroke-width="0.5" opacity="0.12"/>
+    <rect x="${mainX}" y="${creaseY - 1}" width="${mainW}" height="2" fill="#c8b888" opacity="0.05"/>
+
+    <!-- Top banner: NO REFUNDS — colored band on white paper -->
+    <rect x="${mainX}" y="6" width="${mainW}" height="16" fill="${c.stockDk}"/>
+    <text x="${mainCx}" y="16.5" text-anchor="middle" class="tk-body" font-size="5" fill="${c.bannerText}" letter-spacing="2">NO REFUNDS / EXCHANGES · SERVICE CHARGES NOT REFUNDABLE</text>
 
     <g filter="url(#scanned)">
 
@@ -730,24 +775,24 @@ function generateTicketArt(concert, style) {
       <!-- Bottom divider -->
       <line x1="${mainX + 8}" y1="120" x2="${mainX + mainW - 8}" y2="120" stroke="${c.ink}" stroke-width="0.4" opacity="0.3"/>
 
-      <!-- Bottom info band -->
-      <rect x="${mainX}" y="123" width="${mainW}" height="30" fill="${c.band}" opacity="0.35"/>
+      <!-- Bottom info band — colored stripe on paper -->
+      <rect x="${mainX}" y="123" width="${mainW}" height="30" fill="${c.stock}" opacity="0.15"/>
 
       <!-- Section / Row / Seat / Price boxes -->
       <text x="${mainX + 40}" y="133" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">SECTION</text>
-      <rect x="${mainX + 12}" y="136" width="56" height="14" rx="1" fill="${c.bandAlt}" opacity="0.4"/>
+      <rect x="${mainX + 12}" y="136" width="56" height="14" rx="1" fill="${c.stock}" opacity="0.12"/>
       <text x="${mainX + 40}" y="147" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(sectionCode)}</text>
 
       <text x="${mainX + 110}" y="133" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">ROW/BOX</text>
-      <rect x="${mainX + 82}" y="136" width="56" height="14" rx="1" fill="${c.bandAlt}" opacity="0.4"/>
+      <rect x="${mainX + 82}" y="136" width="56" height="14" rx="1" fill="${c.stock}" opacity="0.12"/>
       <text x="${mainX + 110}" y="147" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(rowCode)}</text>
 
       <text x="${mainX + 180}" y="133" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">SEAT</text>
-      <rect x="${mainX + 152}" y="136" width="56" height="14" rx="1" fill="${c.bandAlt}" opacity="0.4"/>
+      <rect x="${mainX + 152}" y="136" width="56" height="14" rx="1" fill="${c.stock}" opacity="0.12"/>
       <text x="${mainX + 180}" y="147" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(seatCode)}</text>
 
       <text x="${mainX + mainW - 50}" y="133" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}">PRICE(TAX INCL)</text>
-      <rect x="${mainX + mainW - 78}" y="136" width="56" height="14" rx="1" fill="${c.bandAlt}" opacity="0.4"/>
+      <rect x="${mainX + mainW - 78}" y="136" width="56" height="14" rx="1" fill="${c.stock}" opacity="0.12"/>
       <text x="${mainX + mainW - 50}" y="147" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(price)}</text>
 
       <!-- Gen Admission line -->
@@ -759,11 +804,19 @@ function generateTicketArt(concert, style) {
     <g transform="translate(${mainX + mainW/2 - bx/2}, 168)">${barcode}</g>
     <text x="${mainCx}" y="192" text-anchor="middle" class="tk-mono" font-size="4.5" fill="${c.faded}" letter-spacing="0.5">${esc(ticketNum)}  ${esc(sectionCode)}  ${esc(serialSuffix)}</text>
 
-    <!-- Edge wear -->
-    <rect x="6" y="6" width="8" height="8" fill="#000" opacity="0.04" rx="1"/>
-    <rect x="${mainX + mainW - 2}" y="6" width="8" height="8" fill="#000" opacity="0.03" rx="1"/>
-    <rect x="6" y="186" width="8" height="8" fill="#000" opacity="0.05" rx="1"/>
-    <rect x="${mainX + mainW - 2}" y="186" width="8" height="8" fill="#000" opacity="0.04" rx="1"/>
+    <!-- Edge wear — heavier -->
+    <rect x="6" y="6" width="12" height="12" fill="#000" opacity="0.07" rx="2"/>
+    <rect x="${mainX + mainW - 4}" y="6" width="12" height="10" fill="#000" opacity="0.06" rx="2"/>
+    <rect x="6" y="182" width="12" height="12" fill="#000" opacity="0.08" rx="2"/>
+    <rect x="${mainX + mainW - 4}" y="184" width="12" height="10" fill="#000" opacity="0.07" rx="2"/>
+    <!-- Top/bottom edge scuffs -->
+    <rect x="${rNum(80, 200)}" y="6" width="${rNum(30, 60)}" height="3" fill="#000" opacity="0.04"/>
+    <rect x="${rNum(250, 400)}" y="191" width="${rNum(30, 60)}" height="3" fill="#000" opacity="0.03"/>
+    <!-- Faded patch (as if rubbed/handled) -->
+    <rect x="${rNum(180, 350)}" y="${rNum(60, 120)}" width="${rNum(40, 80)}" height="${rNum(20, 40)}" rx="8" fill="#f8f4ee" opacity="0.06"/>
+
+    <!-- Overall worn texture overlay -->
+    <rect x="6" y="6" width="${mainX + mainW - 6}" height="188" filter="url(#worn)" opacity="0.04" fill="none"/>
   </g>
 </svg>`;
 }
