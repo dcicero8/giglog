@@ -38,8 +38,9 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
   }
 
   // ── Cylindrical 3D carousel ──
-  // Keep radius small relative to perspective so front card isn't blown up
-  const radius = Math.max(280, count * 28)
+  // Radius must be large enough that adjacent cards don't overlap
+  // but perspective must be proportionally larger so the front card isn't huge
+  const radius = Math.max(500, count * 55)
   const anglePerCard = 360 / count
 
   const getStyle = (index) => {
@@ -75,7 +76,7 @@ export default function TicketCarousel({ tickets, onTicketClick }) {
       {/* 3D cylindrical scene */}
       <div
         className="relative flex items-center justify-center overflow-hidden"
-        style={{ perspective: 1200, perspectiveOrigin: '50% 45%', height: 240 }}
+        style={{ perspective: radius * 3, perspectiveOrigin: '50% 45%', height: 240 }}
       >
         {/* Reflective shelf beneath */}
         <div
