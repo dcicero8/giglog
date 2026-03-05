@@ -6,20 +6,41 @@ const router = Router();
 const SETLISTFM_BASE = 'https://api.setlist.fm/rest/1.0';
 
 // Token bucket rate limiter
+// setlist.fm allows ~2 req/sec; daily self-imposed limit of 1440
 const rateLimiter = {
   tokens: 2,
   maxTokens: 2,
   lastRefill: Date.now(),
   refillRate: 2, // tokens per second
 
-  canMakeRequest() {
-    this.refillTokens();
+  getDailyUsage() {
     const today = new Date().toISOString().split('T')[0];
     const usage = db.prepare('SELECT request_count FROM api_usage WHERE date = ?').get(today);
-    const dailyCount = usage ? usage.request_count : 0;
-    if (dailyCount >= 1440) return { allowed: false, reason: 'daily_limit', used: dailyCount, limit: 1440 };
-    if (this.tokens < 1) return { allowed: false, reason: 'throttle' };
-    return { allowed: true };
+    return usage ? usage.request_count : 0;
+  },
+
+  checkDailyLimit() {
+    const used = this.getDailyUsage();
+    if (used >= 1440) return { allowed: false, reason: 'daily_limit', used, limit: 1440 };
+    return { allowed: true, used, limit: 1440 };
+  },
+
+  refillTokens() {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRate);
+    this.lastRefill = now;
+  },
+
+  // Wait up to maxWaitMs for a token to become available
+  async waitForToken(maxWaitMs = 3000) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      this.refillTokens();
+      if (this.tokens >= 1) return true;
+      await new Promise(r => setTimeout(r, 250));
+    }
+    return false;
   },
 
   consumeToken() {
@@ -28,13 +49,6 @@ const rateLimiter = {
     db.prepare(
       'INSERT INTO api_usage (date, request_count) VALUES (?, 1) ON CONFLICT(date) DO UPDATE SET request_count = request_count + 1'
     ).run(today);
-  },
-
-  refillTokens() {
-    const now = Date.now();
-    const elapsed = (now - this.lastRefill) / 1000;
-    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRate);
-    this.lastRefill = now;
   },
 };
 
@@ -68,10 +82,19 @@ async function fetchSetlistFm(endpoint) {
   const apiKey = process.env.SETLISTFM_API_KEY;
   if (!apiKey) throw new Error('SETLISTFM_API_KEY not configured');
 
-  const check = rateLimiter.canMakeRequest();
-  if (!check.allowed) {
+  // Check daily limit first
+  const daily = rateLimiter.checkDailyLimit();
+  if (!daily.allowed) {
     const err = new Error('RATE_LIMITED');
-    err.rateLimitInfo = check;
+    err.rateLimitInfo = daily;
+    throw err;
+  }
+
+  // Wait for per-second token (auto-queues instead of failing)
+  const gotToken = await rateLimiter.waitForToken();
+  if (!gotToken) {
+    const err = new Error('RATE_LIMITED');
+    err.rateLimitInfo = { reason: 'throttle', used: daily.used, limit: daily.limit };
     throw err;
   }
 
@@ -103,26 +126,30 @@ async function fetchSetlistFm(endpoint) {
 function handleRateLimitError(res, err) {
   const info = err.rateLimitInfo || {};
   const reset = getRateLimitResetInfo();
+  const used = info.used ?? rateLimiter.getDailyUsage();
+  const limit = info.limit ?? 1440;
+  const remaining = limit - used;
 
   if (info.reason === 'daily_limit') {
     return res.status(429).json({
-      error: `Daily API limit reached (${info.used}/${info.limit} requests). Resets in ${reset.hoursLeft}h ${reset.minsLeft}m.`,
+      error: `Daily limit reached (${used}/${limit} calls used). Resets in ${reset.hoursLeft}h ${reset.minsLeft}m (midnight UTC).`,
+      used, limit, remaining: 0,
       resetAt: reset.resetAt,
-      hoursLeft: reset.hoursLeft,
-      minsLeft: reset.minsLeft,
     });
   }
 
   if (info.reason === 'api_limit') {
-    const retryMsg = info.retryAfter ? ` Try again in ${info.retryAfter} seconds.` : ' Try again in a few seconds.';
+    const retryAfter = info.retryAfter || '10';
     return res.status(429).json({
-      error: `setlist.fm rate limit hit.${retryMsg}`,
+      error: `setlist.fm rate limit hit — try again in ${retryAfter} seconds. (${used}/${limit} daily calls used, ${remaining} remaining)`,
+      used, limit, remaining,
     });
   }
 
-  // Throttle (per-second token bucket)
+  // Throttle — shouldn't normally reach here since we now auto-wait
   return res.status(429).json({
-    error: 'Too many requests — try again in a few seconds.',
+    error: `Too many rapid requests — wait a moment and try again. (${used}/${limit} daily calls used, ${remaining} remaining)`,
+    used, limit, remaining,
   });
 }
 
@@ -263,12 +290,21 @@ router.get('/festival/:id', async (req, res) => {
 // API usage stats
 router.get('/usage', (req, res) => {
   const today = new Date().toISOString().split('T')[0];
-  const usage = db.prepare('SELECT request_count FROM api_usage WHERE date = ?').get(today);
+  const used = rateLimiter.getDailyUsage();
+  const limit = 1440;
+  const reset = getRateLimitResetInfo();
   res.json({
     date: today,
-    requestCount: usage ? usage.request_count : 0,
-    dailyLimit: 1440,
-    remaining: 1440 - (usage ? usage.request_count : 0),
+    used,
+    limit,
+    remaining: limit - used,
+    resetAt: reset.resetAt,
+    resetsIn: `${reset.hoursLeft}h ${reset.minsLeft}m`,
+    rules: {
+      dailyLimit: `${limit} API calls per day (resets midnight UTC)`,
+      perSecond: '~2 requests per second (auto-queued)',
+      caching: 'Searches cached 24h, setlists cached 7 days, festivals cached 7 days',
+    },
   });
 });
 
