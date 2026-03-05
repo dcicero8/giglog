@@ -619,8 +619,8 @@ function generateTicketArt(concert, style) {
   }
   tornPath += ` L ${pad} ${pad + tH}`;
 
-  // Artist font size — scale for width
-  const artistSize = artist.length > 28 ? 14 : artist.length > 22 ? 17 : artist.length > 16 ? 20 : artist.length > 12 ? 24 : 28;
+  // Artist font size — scale for width (normal weight needs less room than bold)
+  const artistSize = artist.length > 28 ? 13 : artist.length > 22 ? 15 : artist.length > 16 ? 18 : artist.length > 12 ? 22 : 26;
 
   // Foxing spots
   const foxingCount = rNum(2, 6);
@@ -649,9 +649,9 @@ function generateTicketArt(concert, style) {
       <path d="${tornPath} L ${W - pad} ${pad + tH} L ${W - pad} ${pad} Z"/>
     </clipPath>
     <style>
-      .tk-bold { font-family: 'Arial Black', 'Impact', Arial, sans-serif; font-weight: 900; }
-      .tk-body { font-family: 'Arial Narrow', Arial, sans-serif; font-weight: 700; }
-      .tk-mono { font-family: 'Courier New', monospace; font-weight: 700; }
+      .tk-title { font-family: Arial, Helvetica, sans-serif; font-weight: 600; }
+      .tk-body { font-family: Arial, Helvetica, sans-serif; font-weight: 400; }
+      .tk-mono { font-family: 'Courier New', monospace; font-weight: 400; }
     </style>
   </defs>
 
@@ -684,60 +684,60 @@ function generateTicketArt(concert, style) {
 
       <!-- ══ TOP BANNER — colored ══ -->
       <rect x="${pad}" y="${pad}" width="${tW}" height="14" fill="${c.stockDk}"/>
-      <text x="${cx}" y="${pad + 10}" text-anchor="middle" class="tk-body" font-size="4.5" fill="${c.bannerText}" letter-spacing="1.5">NO REFUNDS / EXCHANGES · NOT REFUNDABLE</text>
+      <text x="${cx}" y="${pad + 10}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.bannerText}" letter-spacing="1.2">NO REFUNDS / EXCHANGES · NOT REFUNDABLE</text>
 
       <g filter="url(#scanned)">
 
         <!-- Serial top-right -->
-        <text x="${W - pad - 6}" y="${pad + 25}" text-anchor="end" class="tk-mono" font-size="4" fill="${c.faded}" opacity="0.6">${esc(serialPrefix)}</text>
+        <text x="${W - pad - 6}" y="${pad + 25}" text-anchor="end" class="tk-mono" font-size="3.5" fill="${c.faded}" opacity="0.5">${esc(serialPrefix)}</text>
 
         <!-- Venue -->
-        <text x="${cx}" y="${pad + 32}" text-anchor="middle" class="tk-bold" font-size="11" fill="${c.ink}" letter-spacing="1">${esc(venue.length > 24 ? venue.substring(0,22)+'..' : venue)}</text>
-        <text x="${cx}" y="${pad + 42}" text-anchor="middle" class="tk-body" font-size="7" fill="${c.inkLt}" letter-spacing="0.5">${esc(city)}</text>
+        <text x="${cx}" y="${pad + 33}" text-anchor="middle" class="tk-title" font-size="10" fill="${c.ink}" letter-spacing="0.8">${esc(venue.length > 26 ? venue.substring(0,24)+'..' : venue)}</text>
+        <text x="${cx}" y="${pad + 43}" text-anchor="middle" class="tk-body" font-size="6.5" fill="${c.inkLt}" letter-spacing="0.3">${esc(city)}</text>
 
         <!-- Separator -->
-        <line x1="${pad + 10}" y1="${pad + 47}" x2="${W - pad - 10}" y2="${pad + 47}" stroke="${c.ink}" stroke-width="0.3" opacity="0.25"/>
+        <line x1="${pad + 10}" y1="${pad + 48}" x2="${W - pad - 10}" y2="${pad + 48}" stroke="${c.ink}" stroke-width="0.3" opacity="0.20"/>
 
         <!-- Presenter -->
-        <text x="${cx}" y="${pad + 56}" text-anchor="middle" class="tk-body" font-size="5" fill="${c.faded}" letter-spacing="1.5">AN EVENING WITH</text>
+        <text x="${cx}" y="${pad + 57}" text-anchor="middle" class="tk-body" font-size="4.5" fill="${c.faded}" letter-spacing="1.5">AN EVENING WITH</text>
 
         <!-- ★ ARTIST NAME ★ -->
-        <text x="${cx}" y="${pad + 56 + artistSize + 8}" text-anchor="middle" class="tk-bold" font-size="${artistSize}" fill="${c.ink}" letter-spacing="1.5">${esc(artist.length > 26 ? artist.substring(0,24)+'..' : artist)}</text>
+        <text x="${cx}" y="${pad + 78}" text-anchor="middle" class="tk-title" font-size="${artistSize}" fill="${c.ink}" letter-spacing="1">${esc(artist.length > 28 ? artist.substring(0,26)+'..' : artist)}</text>
 
         <!-- Date + Time -->
-        <text x="${cx}" y="${pad + 100}" text-anchor="middle" class="tk-bold" font-size="10" fill="${c.ink}">${esc(fullDate)}  ${timeStr}</text>
+        <text x="${cx}" y="${pad + 96}" text-anchor="middle" class="tk-title" font-size="9" fill="${c.ink}">${esc(fullDate)}  ${timeStr}</text>
 
         <!-- Divider -->
-        <line x1="${pad + 8}" y1="${pad + 106}" x2="${W - pad - 8}" y2="${pad + 106}" stroke="${c.ink}" stroke-width="0.3" opacity="0.25"/>
+        <line x1="${pad + 8}" y1="${pad + 103}" x2="${W - pad - 8}" y2="${pad + 103}" stroke="${c.ink}" stroke-width="0.3" opacity="0.20"/>
 
         <!-- Info band -->
-        <rect x="${pad}" y="${pad + 109}" width="${tW}" height="24" fill="${c.stock}" opacity="0.12"/>
+        <rect x="${pad}" y="${pad + 106}" width="${tW}" height="24" fill="${c.stock}" opacity="0.10"/>
 
         <!-- Section / Row / Seat / Price -->
-        <text x="${pad + 30}" y="${pad + 117}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.faded}">SECTION</text>
-        <rect x="${pad + 8}" y="${pad + 119}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.10"/>
-        <text x="${pad + 30}" y="${pad + 128}" text-anchor="middle" class="tk-bold" font-size="8" fill="${c.ink}">${esc(sectionCode.length > 7 ? sectionCode.substring(0,6) : sectionCode)}</text>
+        <text x="${pad + 30}" y="${pad + 114}" text-anchor="middle" class="tk-body" font-size="3.5" fill="${c.faded}">SECTION</text>
+        <rect x="${pad + 8}" y="${pad + 116}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.08"/>
+        <text x="${pad + 30}" y="${pad + 125}" text-anchor="middle" class="tk-title" font-size="7" fill="${c.ink}">${esc(sectionCode.length > 7 ? sectionCode.substring(0,6) : sectionCode)}</text>
 
-        <text x="${pad + 82}" y="${pad + 117}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.faded}">ROW</text>
-        <rect x="${pad + 60}" y="${pad + 119}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.10"/>
-        <text x="${pad + 82}" y="${pad + 128}" text-anchor="middle" class="tk-bold" font-size="8" fill="${c.ink}">${esc(rowCode)}</text>
+        <text x="${pad + 82}" y="${pad + 114}" text-anchor="middle" class="tk-body" font-size="3.5" fill="${c.faded}">ROW</text>
+        <rect x="${pad + 60}" y="${pad + 116}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.08"/>
+        <text x="${pad + 82}" y="${pad + 125}" text-anchor="middle" class="tk-title" font-size="7" fill="${c.ink}">${esc(rowCode)}</text>
 
-        <text x="${pad + 134}" y="${pad + 117}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.faded}">SEAT</text>
-        <rect x="${pad + 112}" y="${pad + 119}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.10"/>
-        <text x="${pad + 134}" y="${pad + 128}" text-anchor="middle" class="tk-bold" font-size="8" fill="${c.ink}">${esc(seatCode)}</text>
+        <text x="${pad + 134}" y="${pad + 114}" text-anchor="middle" class="tk-body" font-size="3.5" fill="${c.faded}">SEAT</text>
+        <rect x="${pad + 112}" y="${pad + 116}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.08"/>
+        <text x="${pad + 134}" y="${pad + 125}" text-anchor="middle" class="tk-title" font-size="7" fill="${c.ink}">${esc(seatCode)}</text>
 
-        <text x="${W - pad - 32}" y="${pad + 117}" text-anchor="middle" class="tk-body" font-size="4" fill="${c.faded}">PRICE</text>
-        <rect x="${W - pad - 54}" y="${pad + 119}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.10"/>
-        <text x="${W - pad - 32}" y="${pad + 128}" text-anchor="middle" class="tk-bold" font-size="8" fill="${c.ink}">${esc(price)}</text>
+        <text x="${W - pad - 32}" y="${pad + 114}" text-anchor="middle" class="tk-body" font-size="3.5" fill="${c.faded}">PRICE</text>
+        <rect x="${W - pad - 54}" y="${pad + 116}" width="44" height="12" rx="1" fill="${c.stock}" opacity="0.08"/>
+        <text x="${W - pad - 32}" y="${pad + 125}" text-anchor="middle" class="tk-title" font-size="7" fill="${c.ink}">${esc(price)}</text>
 
         <!-- GEN ADM -->
-        <text x="${cx}" y="${pad + 146}" text-anchor="middle" class="tk-mono" font-size="6" fill="${c.ink}" letter-spacing="2">GEN ADM</text>
+        <text x="${cx}" y="${pad + 142}" text-anchor="middle" class="tk-mono" font-size="5.5" fill="${c.ink}" letter-spacing="2">GEN ADM</text>
 
       </g>
 
       <!-- Barcode -->
-      <g transform="translate(${cx - bx/2}, ${pad + 152})">${barcode}</g>
-      <text x="${cx}" y="${pad + 176}" text-anchor="middle" class="tk-mono" font-size="4" fill="${c.faded}" letter-spacing="0.5">${esc(ticketNum)}  ${esc(sectionCode.length > 7 ? sectionCode.substring(0,6) : sectionCode)}  ${esc(serialSuffix)}</text>
+      <g transform="translate(${cx - bx/2}, ${pad + 148})">${barcode}</g>
+      <text x="${cx}" y="${pad + 172}" text-anchor="middle" class="tk-mono" font-size="3.5" fill="${c.faded}" letter-spacing="0.5">${esc(ticketNum)}  ${esc(sectionCode.length > 7 ? sectionCode.substring(0,6) : sectionCode)}  ${esc(serialSuffix)}</text>
 
       <!-- Edge wear -->
       <rect x="${pad}" y="${pad}" width="8" height="8" fill="#000" opacity="0.06" rx="1"/>
