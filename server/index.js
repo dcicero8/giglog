@@ -343,16 +343,15 @@ Return ONLY the JSON, no markdown, no explanation.`,
   }
 });
 
-// AI ticket art generation
+// Ticket art generation (programmatic SVG — no AI needed)
 const TICKET_STYLES = ['blue', 'gold', 'red', 'green', 'pink', 'orange', 'random'];
 
-app.post('/api/concerts/:id/generate-ticket', async (req, res) => {
-  if (!process.env.GEMINI_API_KEY) return res.status(400).json({ error: 'GEMINI_API_KEY not configured' });
+app.post('/api/concerts/:id/generate-ticket', (req, res) => {
   const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
   if (!concert) return res.status(404).json({ error: 'Concert not found' });
-  const style = TICKET_STYLES.includes(req.body.style) ? req.body.style : 'classic';
+  const style = TICKET_STYLES.includes(req.body.style) ? req.body.style : 'blue';
   try {
-    const svg = await generateTicketArt(concert, style);
+    const svg = generateTicketArt(concert, style);
     db.prepare('UPDATE concerts SET ticket_art_svg = ? WHERE id = ?').run(svg, concert.id);
     res.json({ ticket_art_svg: svg });
   } catch (err) {
@@ -360,13 +359,12 @@ app.post('/api/concerts/:id/generate-ticket', async (req, res) => {
   }
 });
 
-app.post('/api/upcoming/:id/generate-ticket', async (req, res) => {
-  if (!process.env.GEMINI_API_KEY) return res.status(400).json({ error: 'GEMINI_API_KEY not configured' });
+app.post('/api/upcoming/:id/generate-ticket', (req, res) => {
   const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
   if (!show) return res.status(404).json({ error: 'Show not found' });
-  const style = TICKET_STYLES.includes(req.body.style) ? req.body.style : 'classic';
+  const style = TICKET_STYLES.includes(req.body.style) ? req.body.style : 'blue';
   try {
-    const svg = await generateTicketArt(show, style);
+    const svg = generateTicketArt(show, style);
     db.prepare('UPDATE upcoming SET ticket_art_svg = ? WHERE id = ?').run(svg, show.id);
     res.json({ ticket_art_svg: svg });
   } catch (err) {
@@ -495,86 +493,123 @@ app.delete('/api/upcoming/:id/poster-image', (req, res) => {
   res.json({ success: true });
 });
 
-async function generateTicketArt(concert, style) {
-  const formattedDate = concert.date
-    ? new Date(concert.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-    : 'Date TBD';
-
+function generateTicketArt(concert, style) {
   const dateObj = concert.date ? new Date(concert.date + 'T00:00:00') : null;
-  const dayOfWeek = dateObj ? dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase() : '';
-  const monthDay = dateObj ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase() : '';
-  const year = dateObj ? dateObj.getFullYear() : '';
+  const dayOfWeek = dateObj ? dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : '';
+  const monthStr = dateObj ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase() : '';
+  const year = dateObj ? String(dateObj.getFullYear()).slice(-2) : '';
+  const dateCompact = dateObj ? `${dateObj.getDate()}${dateObj.toLocaleDateString('en-US',{month:'short'}).toUpperCase()}${year}` : '';
+  const fullDate = dateObj ? `${dayOfWeek} ${monthStr} ${dateObj.getFullYear()}  7:30PM` : 'DATE TBD';
 
-  // Generate fake ticket metadata
-  const ticketCode = `${String.fromCharCode(65 + Math.floor(Math.random()*26))}${String.fromCharCode(65 + Math.floor(Math.random()*26))}${String(Math.floor(Math.random()*9000)+1000)}${String.fromCharCode(65 + Math.floor(Math.random()*26))}`;
-  const serialNum = `${Math.floor(Math.random()*900)+100}${Math.floor(Math.random()*90)+10}`;
-  const section = concert.notes?.match(/sec(?:tion)?\s*(\w+)/i)?.[1] || 'GENADM';
+  const section = concert.section || concert.notes?.match(/sec(?:tion)?\s*(\w+)/i)?.[1] || '';
   const row = concert.notes?.match(/row\s*(\w+)/i)?.[1] || '';
   const seat = concert.notes?.match(/seat\s*(\w+)/i)?.[1] || '';
 
+  const rChar = () => String.fromCharCode(65 + Math.floor(Math.random() * 26));
+  const rNum = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const eventId = `${rChar()}${rNum(10000,99999)}`;
+  const rowCode = row || `${rChar()}${rNum(1000,9999)}`;
+  const seatCode = seat || String(rNum(1,40));
+  const sectionCode = section || String(rNum(100,999));
+  const price = concert.price ? `$${Number(concert.price).toFixed(2)}` : '$0.00';
+  const svcFee = concert.price ? `$${(Number(concert.price) * 0.15).toFixed(2)}` : '$0.00';
+
+  const artist = (concert.artist || 'ARTIST').toUpperCase();
+  const venue = (concert.venue || 'VENUE').toUpperCase();
+  const city = (concert.city || '').toUpperCase();
+
   const colorSchemes = {
-    blue: 'steel blue (#4682B4) and light blue (#87CEEB)',
-    gold: 'golden yellow (#DAA520) and warm cream (#FFF8DC)',
-    red: 'deep red (#B22222) and salmon (#FA8072)',
-    green: 'forest green (#228B22) and mint (#98FB98)',
-    pink: 'hot pink (#FF69B4) and light pink (#FFB6C1)',
-    orange: 'burnt orange (#CC5500) and peach (#FFDAB9)',
+    blue:   { bg: '#E8EEF4', box: '#8BA4BD', boxText: '#fff', accent: '#4A6B8A', text: '#111', stubBg: '#DCE6F0', border: '#A0B8D0' },
+    gold:   { bg: '#F4EDE0', box: '#BDA06A', boxText: '#fff', accent: '#8B7030', text: '#1a1000', stubBg: '#EEE4D0', border: '#D0B878' },
+    red:    { bg: '#F4E4E0', box: '#BD6A6A', boxText: '#fff', accent: '#8A3030', text: '#1a0500', stubBg: '#F0D8D4', border: '#D08878' },
+    green:  { bg: '#E0F4E4', box: '#6ABD7A', boxText: '#fff', accent: '#2A6B3A', text: '#001a00', stubBg: '#D4F0D8', border: '#78D088' },
+    pink:   { bg: '#F4E0EC', box: '#BD6AA0', boxText: '#fff', accent: '#7A2860', text: '#1a0010', stubBg: '#F0D4E4', border: '#D088B8' },
+    orange: { bg: '#F4ECE0', box: '#BD8A5A', boxText: '#fff', accent: '#8A5020', text: '#1a0E00', stubBg: '#F0E0D0', border: '#D0A068' },
   };
 
-  const actualStyle = style === 'random'
-    ? Object.keys(colorSchemes)[Math.floor(Math.random() * Object.keys(colorSchemes).length)]
-    : style;
-  const colors = colorSchemes[actualStyle] || colorSchemes.blue;
+  const styleKeys = Object.keys(colorSchemes);
+  const actualStyle = style === 'random' ? styleKeys[rNum(0, styleKeys.length - 1)] : style;
+  const c = colorSchemes[actualStyle] || colorSchemes.blue;
 
-  const prompt = `Generate an SVG (800x300px) that looks EXACTLY like a real physical concert ticket stub from the late 1980s or early 1990s — like a Ticketmaster, Ticketron, or Bass ticket.
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-CONCERT INFO:
-- Event: ${concert.artist}
-- Venue: ${concert.venue || 'VENUE'}
-- City: ${concert.city || ''}
-- Date: ${dayOfWeek} ${monthDay}, ${year}
-- Price: ${concert.price ? '$' + Number(concert.price).toFixed(2) : '0.00'}
-- Section: ${section}${row ? ` Row: ${row}` : ''}${seat ? ` Seat: ${seat}` : ''}
-- Ticket code: ${ticketCode}
-- Serial: ${serialNum}
-
-CRITICAL DESIGN RULES — follow these exactly:
-1. Color scheme: Use ${colors} as the main ticket stock colors. The ticket should look like it's printed on colored cardstock.
-2. Layout: Main ticket on the left (~600px), tear-off stub on the right (~200px) separated by a dashed/perforated line.
-3. Typography: ALL TEXT MUST BE UPPERCASE. Use bold, blocky sans-serif fonts (like Impact, Arial Black). The venue name should be very prominent at the top. The artist/event name should be large and bold.
-4. Include realistic ticket details scattered around: "NO REFUNDS/EXCHANGES", "SERVICE/HANDLING CHARGES NOT REFUNDABLE", event codes, section/row/seat, the price, the date and time like "7:30PM" or "DOORS 7PM".
-5. The tear-off stub should repeat key info: date, event code, section, and "GEN ADM" or section info.
-6. Include a fake barcode (simple black vertical lines of varying width) at the bottom of the main section.
-7. Make it look slightly rough/authentic — not too clean or digital. Use slightly different background shade rectangles, like real printed ticket stock has colored bands/sections.
-8. DO NOT use any gradients, drop shadows, or modern design elements. This should look like it came out of a dot-matrix or thermal printer on colored stock paper.
-9. The overall vibe should match real tickets from concerts like Lollapalooza '92, Grateful Dead '87, or Pink Floyd '94 — utilitarian, dense with info, printed on colored stock.
-
-Return ONLY the SVG code. No markdown, no explanation, no code fences.`;
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 8000 },
-      }),
-    }
-  );
-  if (!response.ok) {
-    if (response.status === 429) {
-      throw new Error('Gemini API free tier quota exceeded — try again tomorrow or upgrade your plan');
-    }
-    const errBody = await response.text();
-    throw new Error(`Gemini API returned ${response.status}: ${errBody}`);
+  // Vertical barcode for stub
+  let vBarcode = '';
+  let by = 0;
+  for (let i = 0; i < 50; i++) {
+    const h = [1, 1.5, 2, 2.5][rNum(0,3)];
+    if (i % 2 === 0) vBarcode += `<rect x="0" y="${by}" width="16" height="${h}" fill="#222"/>`;
+    by += h + [0.4, 0.6, 0.8][rNum(0,2)];
   }
-  const data = await response.json();
-  let svg = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  const svgMatch = svg.match(/<svg[\s\S]*<\/svg>/i);
-  if (svgMatch) svg = svgMatch[0];
-  if (!svg.includes('<svg')) throw new Error('No valid SVG returned');
-  return svg;
+
+  const artistSize = artist.length > 32 ? 16 : artist.length > 24 ? 19 : artist.length > 18 ? 22 : 26;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 220">
+  <defs>
+    <style>
+      .t-bold { font-family: 'Arial Black', 'Impact', Arial, sans-serif; font-weight: 900; }
+      .t-body { font-family: 'Arial Narrow', Arial, sans-serif; font-weight: 700; }
+      .t-mono { font-family: 'Courier New', monospace; font-weight: 700; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="600" height="220" rx="4" fill="${c.bg}" stroke="${c.border}" stroke-width="1"/>
+
+  <!-- LEFT INFO COLUMN -->
+  <text x="36" y="14" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">SECTION</text>
+  <rect x="8" y="17" width="56" height="20" rx="2" fill="${c.box}"/>
+  <text x="36" y="32" text-anchor="middle" class="t-bold" font-size="11" fill="${c.boxText}">${esc(sectionCode)}</text>
+
+  <text x="36" y="49" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">ROW</text>
+  <rect x="8" y="52" width="56" height="20" rx="2" fill="${c.box}"/>
+  <text x="36" y="67" text-anchor="middle" class="t-bold" font-size="11" fill="${c.boxText}">${esc(rowCode)}</text>
+
+  <text x="36" y="84" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">SEAT</text>
+  <rect x="8" y="87" width="56" height="20" rx="2" fill="${c.box}"/>
+  <text x="36" y="102" text-anchor="middle" class="t-bold" font-size="11" fill="${c.boxText}">${esc(seatCode)}</text>
+
+  <text x="36" y="120" text-anchor="middle" class="t-mono" font-size="7" fill="${c.accent}">${dateCompact}</text>
+
+  <text x="36" y="136" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">PRICE</text>
+  <rect x="8" y="139" width="56" height="16" rx="2" fill="${c.box}"/>
+  <text x="36" y="151" text-anchor="middle" class="t-bold" font-size="9" fill="${c.boxText}">${esc(price)}</text>
+
+  <text x="36" y="168" text-anchor="middle" class="t-body" font-size="6" fill="${c.accent}">SVC FEE</text>
+  <text x="36" y="178" text-anchor="middle" class="t-mono" font-size="8" fill="${c.text}">${esc(svcFee)}</text>
+
+  <!-- CENTER EVENT INFO -->
+  <text x="270" y="20" text-anchor="middle" class="t-body" font-size="8" fill="${c.accent}" letter-spacing="3">TICKETMASTER</text>
+  <text x="270" y="48" text-anchor="middle" class="t-bold" font-size="${artistSize}" fill="${c.text}" letter-spacing="1">${esc(artist.length > 36 ? artist.substring(0,34)+'..' : artist)}</text>
+  <text x="270" y="70" text-anchor="middle" class="t-bold" font-size="11" fill="${c.text}">${esc(venue.length > 34 ? venue.substring(0,32)+'..' : venue)}</text>
+  ${city ? `<text x="270" y="84" text-anchor="middle" class="t-body" font-size="10" fill="${c.accent}">${esc(city)}</text>` : ''}
+  <text x="270" y="108" text-anchor="middle" class="t-bold" font-size="13" fill="${c.text}">${esc(fullDate)}</text>
+  <text x="270" y="126" text-anchor="middle" class="t-body" font-size="8" fill="${c.accent}">NO REFUNDS / EXCHANGES</text>
+
+  <!-- PERFORATED LINE -->
+  <line x1="445" y1="3" x2="445" y2="195" stroke="${c.accent}" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+
+  <!-- RIGHT STUB -->
+  <rect x="448" y="1" width="151" height="196" rx="3" fill="${c.stubBg}"/>
+  <rect x="456" y="8" width="52" height="16" rx="2" fill="${c.box}"/>
+  <text x="482" y="20" text-anchor="middle" class="t-bold" font-size="8" fill="${c.boxText}">${esc(eventId)}</text>
+  <rect x="456" y="30" width="52" height="16" rx="2" fill="${c.box}"/>
+  <text x="482" y="42" text-anchor="middle" class="t-bold" font-size="8" fill="${c.boxText}">${esc(rowCode)}</text>
+  <text x="456" y="58" class="t-body" font-size="6" fill="${c.accent}">SECTION</text>
+  <rect x="456" y="60" width="52" height="16" rx="2" fill="${c.box}"/>
+  <text x="482" y="72" text-anchor="middle" class="t-bold" font-size="8" fill="${c.boxText}">${esc(sectionCode)}</text>
+  <text x="456" y="90" class="t-mono" font-size="7" fill="${c.text}">${dateCompact}</text>
+  <text x="456" y="104" class="t-body" font-size="7" fill="${c.accent}">GEN ADM</text>
+  <text x="456" y="118" class="t-mono" font-size="7" fill="${c.text}">${esc(price)}</text>
+  <g transform="translate(520, 8)">${vBarcode}</g>
+  <text transform="translate(548,100) rotate(90)" class="t-body" font-size="7" fill="${c.accent}" opacity="0.5">${esc(eventId)} ${esc(sectionCode)}</text>
+
+  <!-- BOTTOM STRIP -->
+  <rect x="1" y="197" width="598" height="22" rx="0" fill="${c.box}" opacity="0.15"/>
+  <text x="12" y="212" class="t-mono" font-size="7" fill="${c.text}">${esc(eventId)}  ${esc(sectionCode)}  ${esc(rowCode)}  ${esc(seatCode)}</text>
+  <text x="270" y="212" text-anchor="middle" class="t-body" font-size="7" fill="${c.accent}">NO PHOTOGRAPHY</text>
+  <text x="588" y="212" text-anchor="end" class="t-mono" font-size="7" fill="${c.text}">${esc(price)}</text>
+</svg>`;
 }
 
 // Tickets endpoint (combined concerts + upcoming for carousel)

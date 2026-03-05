@@ -33,12 +33,12 @@ const rateLimiter = {
   },
 
   // Wait up to maxWaitMs for a token to become available
-  async waitForToken(maxWaitMs = 3000) {
+  async waitForToken(maxWaitMs = 10000) {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {
       this.refillTokens();
       if (this.tokens >= 1) return true;
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 300));
     }
     return false;
   },
@@ -108,11 +108,26 @@ async function fetchSetlistFm(endpoint) {
   });
 
   if (response.status === 429) {
-    // setlist.fm's own rate limit
-    const retryAfter = response.headers.get('Retry-After');
-    const err = new Error('RATE_LIMITED');
-    err.rateLimitInfo = { reason: 'api_limit', retryAfter };
-    throw err;
+    // setlist.fm's own rate limit — auto-retry after the suggested delay
+    const retryAfter = parseInt(response.headers.get('Retry-After') || '5', 10);
+    const waitMs = Math.min(retryAfter * 1000, 15000); // max 15s wait
+    console.log(`[setlist.fm] 429 received, retrying in ${retryAfter}s...`);
+    await new Promise(r => setTimeout(r, waitMs));
+
+    // Retry once
+    const retry = await fetch(`${SETLISTFM_BASE}${endpoint}`, {
+      headers: { 'x-api-key': apiKey, 'Accept': 'application/json' },
+    });
+    if (retry.status === 429) {
+      const err = new Error('RATE_LIMITED');
+      err.rateLimitInfo = { reason: 'api_limit', retryAfter };
+      throw err;
+    }
+    if (!retry.ok) {
+      const text = await retry.text();
+      throw new Error(`setlist.fm API error: ${retry.status} ${text}`);
+    }
+    return retry.json();
   }
 
   if (!response.ok) {

@@ -1,10 +1,52 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import StarRating from './StarRating'
 import TicketArtSVG from './TicketArtSVG'
 import { EBAY_CATEGORIES, getEbayUrl, getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 import { api } from '../lib/api'
 
-const STYLES = ['blue', 'gold', 'red', 'green', 'pink', 'orange', 'random']
+function SetlistBack({ concert }) {
+  const [setlist, setSetlist] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!concert.setlist_fm_id) { setLoading(false); return }
+    api.get(`/setlistfm/setlist/${concert.setlist_fm_id}`)
+      .then(data => setSetlist(data))
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [concert.setlist_fm_id])
+
+  if (loading) return <p className="text-[#5a4a2a] text-xs italic">Loading setlist...</p>
+  if (error) return <p className="text-[#8a3030] text-xs">{error}</p>
+  if (!setlist?.sets?.set?.length) return <p className="text-[#5a4a2a] text-sm italic">No setlist data</p>
+
+  const allSongs = []
+  for (const set of setlist.sets.set) {
+    if (set.encore) allSongs.push({ type: 'encore', num: set.encore })
+    if (set.song) allSongs.push(...set.song.map(s => ({ type: 'song', ...s })))
+  }
+
+  return (
+    <div className="font-mono">
+      <p className="text-[10px] text-[#8a7a5a] uppercase tracking-widest mb-2">{concert.artist} — Setlist</p>
+      <div className="columns-2 gap-4 text-[11px] text-[#3a2a10] leading-relaxed">
+        {allSongs.map((item, i) =>
+          item.type === 'encore' ? (
+            <p key={`e${i}`} className="text-[#8a4a2a] font-bold text-[10px] uppercase mt-1 break-inside-avoid">— Encore —</p>
+          ) : (
+            <p key={i} className={`break-inside-avoid ${item.tape ? 'opacity-40' : ''}`}>
+              {item.name}{item.cover ? <span className="text-[9px] text-[#8a7a5a]"> ({item.cover.name})</span> : ''}
+            </p>
+          )
+        )}
+      </div>
+      <p className="text-[8px] text-[#8a7a5a] mt-2 pt-1 border-t border-[#d4c9a8]">
+        via <a href={setlist.url || '#'} target="_blank" rel="noopener noreferrer" className="underline text-[#6a5a3a]">setlist.fm</a>
+      </p>
+    </div>
+  )
+}
 
 const YT_MATCH_ICONS = {
   exact: { dot: 'bg-[#4ade80]', label: 'Exact show' },
@@ -15,8 +57,22 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
   const [showEbay, setShowEbay] = useState(false)
   const [showYT, setShowYT] = useState(false)
   const [generating, setGenerating] = useState(false)
-  const [style, setStyle] = useState('classic')
   const [showArt, setShowArt] = useState(false)
+  const [flipSwapped, setFlipSwapped] = useState(false)
+
+  // Auto-show ticket art when setlist opens (so the flip can happen)
+  useEffect(() => {
+    if (setlistOpen && (concert.ticket_art_svg || concert.ticket_image)) {
+      setShowArt(true)
+    }
+  }, [setlistOpen])
+
+  // Delay the position swap to the midpoint of the flip animation
+  // so the height change happens when both faces are edge-on (invisible)
+  useEffect(() => {
+    const t = setTimeout(() => setFlipSwapped(!!setlistOpen), 250)
+    return () => clearTimeout(t)
+  }, [setlistOpen])
   const [ytForm, setYtForm] = useState(false)
   const [ytUrl, setYtUrl] = useState('')
   const [ytMatch, setYtMatch] = useState('exact')
@@ -33,16 +89,11 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
   const handleGenerate = async () => {
     setGenerating(true)
     try {
-      const result = await api.post(`/concerts/${concert.id}/generate-ticket`, { style })
+      const result = await api.post(`/concerts/${concert.id}/generate-ticket`, { style: 'random' })
       onUpdate?.({ ...concert, ticket_art_svg: result.ticket_art_svg })
       setShowArt(true)
     } catch (err) {
-      const msg = err.message || ''
-      if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
-        alert('Gemini API free tier quota exceeded. The limit resets daily — try again tomorrow, or upgrade your Gemini API plan.')
-      } else {
-        alert('Failed to generate: ' + msg)
-      }
+      alert('Failed to generate ticket: ' + (err.message || 'Unknown error'))
     } finally {
       setGenerating(false)
     }
@@ -163,35 +214,61 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
       )}
 
       <div className="p-5">
-      {/* Ticket Art / Uploaded Image */}
+      {/* Ticket Art / Uploaded Image — with flip for setlist */}
       {(concert.ticket_image || concert.ticket_art_svg) && (
         <div className="mb-4">
           <button
             onClick={() => setShowArt(!showArt)}
             className="text-xs text-accent hover:text-accent-hover bg-transparent border-0 cursor-pointer mb-2"
           >
-            {showArt ? 'Hide Ticket Art ▲' : 'Show Ticket Art ▼'}
+            {showArt ? 'Hide Ticket ▲' : 'Show Ticket ▼'}
           </button>
           {showArt && (
-            <>
-              {concert.ticket_image ? (
-                <div className="relative group">
-                  <img
-                    src={`/uploads/tickets/${concert.ticket_image}`}
-                    alt={`${concert.artist} ticket`}
-                    className="w-full rounded-lg"
-                  />
-                  <button
-                    onClick={handleRemoveTicketImage}
-                    className="absolute top-2 right-2 px-2 py-1 text-[10px] rounded bg-black/70 text-white hover:bg-accent transition-colors border-0 cursor-pointer opacity-0 group-hover:opacity-100"
-                  >
-                    Remove
-                  </button>
+            <div className="relative" style={{ perspective: '1000px' }}>
+              <div
+                className="relative w-full transition-transform duration-500"
+                style={{
+                  transformStyle: 'preserve-3d',
+                  transform: setlistOpen ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                }}
+              >
+                {/* FRONT — Ticket (in flow when visible, absolute when flipped) */}
+                <div
+                  className={flipSwapped ? 'absolute inset-0 w-full' : ''}
+                  style={{ backfaceVisibility: 'hidden' }}
+                >
+                  {concert.ticket_image ? (
+                    <div className="relative group">
+                      <img
+                        src={`/uploads/tickets/${concert.ticket_image}`}
+                        alt={`${concert.artist} ticket`}
+                        className="w-full rounded-lg"
+                      />
+                      <button
+                        onClick={handleRemoveTicketImage}
+                        className="absolute top-2 right-2 px-2 py-1 text-[10px] rounded bg-black/70 text-white hover:bg-accent transition-colors border-0 cursor-pointer opacity-0 group-hover:opacity-100"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <TicketArtSVG svg={concert.ticket_art_svg} className="w-full" />
+                  )}
                 </div>
-              ) : (
-                <TicketArtSVG svg={concert.ticket_art_svg} className="w-full" />
-              )}
-            </>
+                {/* BACK — Setlist (absolute when hidden, in flow when flipped) */}
+                <div
+                  className={`rounded-lg bg-[#f5f0e6] border border-[#d4c9a8] p-4 ${flipSwapped ? '' : 'absolute inset-0 w-full overflow-y-auto'}`}
+                  style={{
+                    backfaceVisibility: 'hidden',
+                    transform: 'rotateY(180deg)',
+                  }}
+                >
+                  {setlistOpen && (
+                    <SetlistBack concert={concert} />
+                  )}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -406,27 +483,14 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
             {uploading ? 'Uploading...' : concert.ticket_image ? '📷 Replace Ticket' : '📷 Upload Ticket'}
           </button>
 
-          {/* AI Generate (next to upload ticket) */}
-          {aiAvailable && (
-            <>
-              <select
-                value={style}
-                onChange={e => setStyle(e.target.value)}
-                className="px-2 py-1 text-xs rounded-lg bg-bg-input border border-border text-text cursor-pointer"
-              >
-                {STYLES.map(s => (
-                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleGenerate}
-                disabled={generating}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {generating ? 'Printing...' : concert.ticket_art_svg ? '🎟️ Reprint Ticket' : '🎟️ Print Ticket'}
-              </button>
-            </>
-          )}
+          {/* Print Ticket (programmatic SVG) */}
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {generating ? 'Printing...' : concert.ticket_art_svg ? '🎟️ Reprint' : '🎟️ Print Ticket'}
+          </button>
 
           {/* Upload poster */}
           <input
