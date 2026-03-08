@@ -3,24 +3,27 @@ import db from '../db.js';
 
 const router = Router();
 
+const US = (n) => `($${n}::int IS NULL OR user_id = $${n} OR user_id IS NULL)`;
+
 // GET /api/songs — aggregate all songs from cached setlists
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   // Get all concerts (regular + festival children) that have a linked setlist
-  const concerts = db.prepare(
+  const concerts = await db.queryRows(
     `SELECT id, artist, venue, city, date, rating, setlist_fm_id, parent_concert_id
      FROM concerts
-     WHERE setlist_fm_id IS NOT NULL
-     ORDER BY date ASC`
-  ).all();
+     WHERE setlist_fm_id IS NOT NULL AND ${US(1)}
+     ORDER BY date ASC`,
+    [req.userId]
+  );
 
   const allSongs = [];
   let showsWithData = 0;
 
   for (const concert of concerts) {
-    // Read from setlist cache (never call the API)
-    const cached = db.prepare(
-      "SELECT response FROM setlist_cache WHERE cache_key = ?"
-    ).get(`setlist:${concert.setlist_fm_id}`);
+    const cached = await db.queryRow(
+      "SELECT response FROM setlist_cache WHERE cache_key = $1",
+      [`setlist:${concert.setlist_fm_id}`]
+    );
 
     if (!cached) continue;
 
@@ -59,7 +62,6 @@ router.get('/', (req, res) => {
     if (hasSongs) showsWithData++;
   }
 
-  // Build frequency map
   const freqMap = {};
   for (const s of allSongs) {
     const key = s.song.toLowerCase();
@@ -79,7 +81,6 @@ router.get('/', (req, res) => {
   const songsByFrequency = Object.values(freqMap)
     .sort((a, b) => b.count - a.count || a.song.localeCompare(b.song));
 
-  // Stats
   const coverCount = allSongs.filter(s => s.isCover).length;
   const encoreCount = allSongs.filter(s => s.isEncore).length;
 

@@ -13,14 +13,14 @@ const rateLimiter = {
   lastRefill: Date.now(),
   refillRate: 2, // tokens per second
 
-  getDailyUsage() {
+  async getDailyUsage() {
     const today = new Date().toISOString().split('T')[0];
-    const usage = db.prepare('SELECT request_count FROM api_usage WHERE date = ?').get(today);
+    const usage = await db.queryRow('SELECT request_count FROM api_usage WHERE date = $1', [today]);
     return usage ? usage.request_count : 0;
   },
 
-  checkDailyLimit() {
-    const used = this.getDailyUsage();
+  async checkDailyLimit() {
+    const used = await this.getDailyUsage();
     if (used >= 1440) return { allowed: false, reason: 'daily_limit', used, limit: 1440 };
     return { allowed: true, used, limit: 1440 };
   },
@@ -43,27 +43,36 @@ const rateLimiter = {
     return false;
   },
 
-  consumeToken() {
+  async consumeToken() {
     this.tokens -= 1;
     const today = new Date().toISOString().split('T')[0];
-    db.prepare(
-      'INSERT INTO api_usage (date, request_count) VALUES (?, 1) ON CONFLICT(date) DO UPDATE SET request_count = request_count + 1'
-    ).run(today);
+    await db.query(
+      'INSERT INTO api_usage (date, request_count) VALUES ($1, 1) ON CONFLICT(date) DO UPDATE SET request_count = api_usage.request_count + 1',
+      [today]
+    );
   },
 };
 
 // Cache helpers
-function getCached(cacheKey) {
-  const row = db.prepare(
-    "SELECT response FROM setlist_cache WHERE cache_key = ? AND expires_at > datetime('now')"
-  ).get(cacheKey);
+async function getCached(cacheKey) {
+  const row = await db.queryRow(
+    "SELECT response FROM setlist_cache WHERE cache_key = $1 AND expires_at > NOW()",
+    [cacheKey]
+  );
   return row ? JSON.parse(row.response) : null;
 }
 
-function setCache(cacheKey, data, ttlHours) {
-  db.prepare(
-    "INSERT OR REPLACE INTO setlist_cache (cache_key, response, fetched_at, expires_at) VALUES (?, ?, datetime('now'), datetime('now', ?))"
-  ).run(cacheKey, JSON.stringify(data), `+${ttlHours} hours`);
+async function setCache(cacheKey, data, ttlHours) {
+  const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
+  await db.query(
+    `INSERT INTO setlist_cache (cache_key, response, fetched_at, expires_at)
+     VALUES ($1, $2, NOW(), $3)
+     ON CONFLICT (cache_key) DO UPDATE SET
+       response = EXCLUDED.response,
+       fetched_at = NOW(),
+       expires_at = EXCLUDED.expires_at`,
+    [cacheKey, JSON.stringify(data), expiresAt]
+  );
 }
 
 function getRateLimitResetInfo() {
@@ -83,7 +92,7 @@ async function fetchSetlistFm(endpoint) {
   if (!apiKey) throw new Error('SETLISTFM_API_KEY not configured');
 
   // Check daily limit first
-  const daily = rateLimiter.checkDailyLimit();
+  const daily = await rateLimiter.checkDailyLimit();
   if (!daily.allowed) {
     const err = new Error('RATE_LIMITED');
     err.rateLimitInfo = daily;
@@ -98,7 +107,7 @@ async function fetchSetlistFm(endpoint) {
     throw err;
   }
 
-  rateLimiter.consumeToken();
+  await rateLimiter.consumeToken();
 
   const response = await fetch(`${SETLISTFM_BASE}${endpoint}`, {
     headers: {
@@ -138,10 +147,10 @@ async function fetchSetlistFm(endpoint) {
   return response.json();
 }
 
-function handleRateLimitError(res, err) {
+async function handleRateLimitError(res, err) {
   const info = err.rateLimitInfo || {};
   const reset = getRateLimitResetInfo();
-  const used = info.used ?? rateLimiter.getDailyUsage();
+  const used = info.used ?? await rateLimiter.getDailyUsage();
   const limit = info.limit ?? 1440;
   const remaining = limit - used;
 
@@ -175,7 +184,7 @@ router.get('/search', async (req, res) => {
 
   try {
     const cacheKey = `search:${artist}:${date || ''}`;
-    const cached = getCached(cacheKey);
+    const cached = await getCached(cacheKey);
     if (cached) return res.json({ ...cached, cached: true });
 
     // Convert YYYY-MM-DD to dd-MM-yyyy for setlist.fm
@@ -186,11 +195,11 @@ router.get('/search', async (req, res) => {
     }
 
     const data = await fetchSetlistFm(`/search/setlists?${params}`);
-    setCache(cacheKey, data, 24);
+    await setCache(cacheKey, data, 24);
     res.json({ ...data, cached: false });
   } catch (err) {
     if (err.message === 'RATE_LIMITED') {
-      return handleRateLimitError(res, err);
+      return await handleRateLimitError(res, err);
     }
     res.status(500).json({ error: err.message });
   }
@@ -200,15 +209,15 @@ router.get('/search', async (req, res) => {
 router.get('/setlist/:id', async (req, res) => {
   try {
     const cacheKey = `setlist:${req.params.id}`;
-    const cached = getCached(cacheKey);
+    const cached = await getCached(cacheKey);
     if (cached) return res.json({ ...cached, cached: true });
 
     const data = await fetchSetlistFm(`/setlist/${req.params.id}`);
-    setCache(cacheKey, data, 168); // 7 days
+    await setCache(cacheKey, data, 168); // 7 days
     res.json({ ...data, cached: false });
   } catch (err) {
     if (err.message === 'RATE_LIMITED') {
-      return handleRateLimitError(res, err);
+      return await handleRateLimitError(res, err);
     }
     res.status(500).json({ error: err.message });
   }
@@ -221,15 +230,15 @@ router.get('/artists', async (req, res) => {
 
   try {
     const cacheKey = `artists:${q}`;
-    const cached = getCached(cacheKey);
+    const cached = await getCached(cacheKey);
     if (cached) return res.json({ ...cached, cached: true });
 
     const data = await fetchSetlistFm(`/search/artists?artistName=${encodeURIComponent(q)}&sort=relevance`);
-    setCache(cacheKey, data, 24);
+    await setCache(cacheKey, data, 24);
     res.json({ ...data, cached: false });
   } catch (err) {
     if (err.message === 'RATE_LIMITED') {
-      return handleRateLimitError(res, err);
+      return await handleRateLimitError(res, err);
     }
     res.status(500).json({ error: err.message });
   }
@@ -239,7 +248,7 @@ router.get('/artists', async (req, res) => {
 router.get('/festival/:id', async (req, res) => {
   try {
     const cacheKey = `festival:${req.params.id}`;
-    const cached = getCached(cacheKey);
+    const cached = await getCached(cacheKey);
     if (cached) return res.json({ ...cached, cached: true });
 
     // Fetch the given setlist to get venue and date
@@ -292,20 +301,20 @@ router.get('/festival/:id', async (req, res) => {
       })),
     };
 
-    setCache(cacheKey, festivalData, 168); // 7 days
+    await setCache(cacheKey, festivalData, 168); // 7 days
     res.json({ ...festivalData, cached: false });
   } catch (err) {
     if (err.message === 'RATE_LIMITED') {
-      return handleRateLimitError(res, err);
+      return await handleRateLimitError(res, err);
     }
     res.status(500).json({ error: err.message });
   }
 });
 
 // API usage stats
-router.get('/usage', (req, res) => {
+router.get('/usage', async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
-  const used = rateLimiter.getDailyUsage();
+  const used = await rateLimiter.getDailyUsage();
   const limit = 1440;
   const reset = getRateLimitResetInfo();
   res.json({

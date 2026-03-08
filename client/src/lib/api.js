@@ -1,8 +1,15 @@
 async function request(path, options = {}) {
   const res = await fetch(`/api${path}`, {
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   })
+
+  if (res.status === 401) {
+    // Redirect to login if session expired
+    window.location.href = '/login'
+    throw new Error('Not authenticated')
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))

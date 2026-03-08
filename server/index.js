@@ -1,23 +1,53 @@
 import 'dotenv/config';
 import express from 'express';
+import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import db from './db.js';
+import { setupAuth } from './auth.js';
+import requireAuth from './middleware/requireAuth.js';
 import concertsRouter from './routes/concerts.js';
 import upcomingRouter from './routes/upcoming.js';
 import wishlistRouter from './routes/wishlist.js';
 import setlistfmRouter from './routes/setlistfm.js';
 import songsRouter from './routes/songs.js';
+import buddiesRouter from './routes/buddies.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
+const PORT = process.env.SERVER_PORT || process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+
+// Session middleware — PgStore gets set up after db.init() connects
+// (placeholder — real store attached in startup block below)
+let sessionMiddleware;
+const sessionConfig = {
+  secret: process.env.SESSION_SECRET || 'giglog-dev-secret-change-in-prod',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+  },
+};
+// Use a lazy session middleware that waits for db to initialize
+app.use((req, res, next) => {
+  if (!sessionMiddleware) {
+    // db hasn't initialized yet, skip session
+    return next();
+  }
+  sessionMiddleware(req, res, next);
+});
+
+// Auth setup (Google OAuth or unauthenticated mode)
+setupAuth(app);
 
 // In production, store uploads on persistent volume
 const uploadsBase = process.env.NODE_ENV === 'production' && fs.existsSync('/app/data')
@@ -51,50 +81,58 @@ const posterUpload = multer({ storage: posterStorage, limits: { fileSize: 10 * 1
 // Serve uploaded files (photos + tickets)
 app.use('/uploads', express.static(uploadsBase));
 
+// Apply auth middleware to all API routes
+app.use('/api', requireAuth);
+
 // API routes
 app.use('/api/concerts', concertsRouter);
 app.use('/api/upcoming', upcomingRouter);
 app.use('/api/wishlist', wishlistRouter);
 app.use('/api/setlistfm', setlistfmRouter);
 app.use('/api/songs', songsRouter);
+app.use('/api/buddies', buddiesRouter);
+
+// User scope helper — shows own data + unclaimed migrated data + everything in dev mode
+const US = (n) => `($${n}::int IS NULL OR user_id = $${n} OR user_id IS NULL)`;
 
 // Stats endpoint for dashboard
 // Count children (individual bands) as shows, but not festival parents themselves
-app.get('/api/stats', (req, res) => {
-  // Count non-parent concerts + children, but NOT festival parent entries
-  const childCount = db.prepare('SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NOT NULL').get().count;
-  const parentCount = db.prepare('SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NULL AND id IN (SELECT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)').get().count;
-  const soloCount = db.prepare('SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NULL AND id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)').get().count;
-  const concertCount = soloCount + childCount; // solo shows + festival bands (exclude festival parent as a "show")
-  const upcomingCount = db.prepare('SELECT COUNT(*) as count FROM upcoming').get().count;
-  const wishlistCount = db.prepare('SELECT COUNT(*) as count FROM wishlist').get().count;
-  const totalSpent = db.prepare('SELECT COALESCE(SUM(price), 0) as total FROM concerts').get().total;
-  const upcomingSpent = db.prepare('SELECT COALESCE(SUM(price), 0) as total FROM upcoming').get().total;
-  const avgPrice = db.prepare('SELECT COALESCE(AVG(price), 0) as avg FROM concerts WHERE price IS NOT NULL AND price > 0').get().avg;
-  const avgLastMinutePrice = db.prepare('SELECT COALESCE(AVG(price), 0) as avg FROM concerts WHERE last_minute = 1 AND price IS NOT NULL AND price > 0').get().avg;
+app.get('/api/stats', async (req, res) => {
+  const uid = req.userId;
+  const childCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)}`, [uid])).count;
+  const soloCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NULL AND ${US(1)} AND id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)`, [uid])).count;
+  const concertCount = parseInt(soloCount) + parseInt(childCount);
+  const upcomingCount = (await db.queryRow(`SELECT COUNT(*) as count FROM upcoming WHERE ${US(1)}`, [uid])).count;
+  const wishlistCount = (await db.queryRow(`SELECT COUNT(*) as count FROM wishlist WHERE ${US(1)}`, [uid])).count;
+  const totalSpent = (await db.queryRow(`SELECT COALESCE(SUM(price), 0) as total FROM concerts WHERE ${US(1)}`, [uid])).total;
+  const upcomingSpent = (await db.queryRow(`SELECT COALESCE(SUM(price), 0) as total FROM upcoming WHERE ${US(1)}`, [uid])).total;
+  const avgPrice = (await db.queryRow(`SELECT COALESCE(AVG(price), 0) as avg FROM concerts WHERE price IS NOT NULL AND price > 0 AND ${US(1)}`, [uid])).avg;
+  const avgLastMinutePrice = (await db.queryRow(`SELECT COALESCE(AVG(price), 0) as avg FROM concerts WHERE last_minute = 1 AND price IS NOT NULL AND price > 0 AND ${US(1)}`, [uid])).avg;
 
   res.json({
     concertCount,
-    upcomingCount,
-    wishlistCount,
-    totalSpent: totalSpent + upcomingSpent,
-    avgPrice: Math.round(avgPrice * 100) / 100,
-    avgLastMinutePrice: Math.round(avgLastMinutePrice * 100) / 100,
+    upcomingCount: parseInt(upcomingCount),
+    wishlistCount: parseInt(wishlistCount),
+    totalSpent: parseFloat(totalSpent) + parseFloat(upcomingSpent),
+    avgPrice: Math.round(parseFloat(avgPrice) * 100) / 100,
+    avgLastMinutePrice: Math.round(parseFloat(avgLastMinutePrice) * 100) / 100,
   });
 });
 
 // Artists aggregate endpoint
-app.get('/api/artists', (req, res) => {
+app.get('/api/artists', async (req, res) => {
+  const uid = req.userId;
   // Exclude festival parent entries (they're containers like "Lollapalooza", not real artists)
   // A festival parent is a concert that has children pointing to it
-  const artists = db.prepare(`
+  const artists = await db.queryRows(`
     SELECT artist, 'concert' as source, date, price, rating FROM concerts
       WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+      AND ${US(1)}
     UNION ALL
-    SELECT artist, 'upcoming' as source, date, price, NULL as rating FROM upcoming
+    SELECT artist, 'upcoming' as source, date, price, NULL as rating FROM upcoming WHERE ${US(1)}
     UNION ALL
-    SELECT artist, 'wishlist' as source, NULL as date, NULL as price, NULL as rating FROM wishlist
-  `).all();
+    SELECT artist, 'wishlist' as source, NULL as date, NULL as price, NULL as rating FROM wishlist WHERE ${US(1)}
+  `, [uid]);
 
   const map = {};
   for (const row of artists) {
@@ -104,7 +142,7 @@ app.get('/api/artists', (req, res) => {
     const entry = map[row.artist];
     if (row.source === 'concert') {
       entry.showCount++;
-      if (row.price) entry.totalSpent += row.price;
+      if (row.price) entry.totalSpent += parseFloat(row.price);
       if (row.rating) entry.ratings.push(row.rating);
       if (row.date) entry.dates.push(row.date);
     } else if (row.source === 'upcoming') {
@@ -134,7 +172,7 @@ app.get('/api/geocode', async (req, res) => {
   const { city } = req.query;
   if (!city) return res.status(400).json({ error: 'city is required' });
 
-  const cached = db.prepare('SELECT lat, lon FROM geocode_cache WHERE city = ?').get(city);
+  const cached = await db.queryRow('SELECT lat, lon FROM geocode_cache WHERE city = $1', [city]);
   if (cached) return res.json(cached);
 
   try {
@@ -146,7 +184,10 @@ app.get('/api/geocode', async (req, res) => {
     if (data.length === 0) return res.status(404).json({ error: 'Location not found' });
 
     const { lat, lon } = data[0];
-    db.prepare('INSERT OR REPLACE INTO geocode_cache (city, lat, lon) VALUES (?, ?, ?)').run(city, parseFloat(lat), parseFloat(lon));
+    await db.query(
+      'INSERT INTO geocode_cache (city, lat, lon) VALUES ($1, $2, $3) ON CONFLICT (city) DO UPDATE SET lat = EXCLUDED.lat, lon = EXCLUDED.lon',
+      [city, parseFloat(lat), parseFloat(lon)]
+    );
     res.json({ lat: parseFloat(lat), lon: parseFloat(lon) });
   } catch (err) {
     res.status(500).json({ error: 'Geocoding failed' });
@@ -162,7 +203,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
   const cacheKey = 'seatgeek_la_concerts_60d_v4';
-  const cached = db.prepare('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = ?').get(cacheKey);
+  const cached = await db.queryRow('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = $1', [cacheKey]);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
   }
@@ -206,11 +247,14 @@ app.get('/api/seatgeek/events', async (req, res) => {
     const generalEvents = (generalData.events || []).map(mapEvent);
 
     // 2. Targeted searches for wishlist + past concert artists (guarantees they appear)
-    const wishlistArtists = db.prepare('SELECT artist FROM wishlist').all();
-    const pastArtists = db.prepare(
+    const uid = req.userId;
+    const wishlistArtists = await db.queryRows(`SELECT artist FROM wishlist WHERE ${US(1)}`, [uid]);
+    const pastArtists = await db.queryRows(
       `SELECT DISTINCT artist FROM concerts
-       WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)`
-    ).all();
+       WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+       AND ${US(1)}`,
+      [uid]
+    );
 
     // Deduplicate: build a unique set of artist names to search
     const searchedNames = new Set();
@@ -253,8 +297,10 @@ app.get('/api/seatgeek/events', async (req, res) => {
 
     // Cache for 1 hour
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    db.prepare('INSERT OR REPLACE INTO seatgeek_cache (cache_key, response, expires_at) VALUES (?, ?, ?)')
-      .run(cacheKey, JSON.stringify(events), expiresAt);
+    await db.query(
+      'INSERT INTO seatgeek_cache (cache_key, response, expires_at) VALUES ($1, $2, $3) ON CONFLICT (cache_key) DO UPDATE SET response = EXCLUDED.response, fetched_at = NOW(), expires_at = EXCLUDED.expires_at',
+      [cacheKey, JSON.stringify(events), expiresAt]
+    );
 
     res.json(events);
   } catch (err) {
@@ -265,24 +311,25 @@ app.get('/api/seatgeek/events', async (req, res) => {
 });
 
 // Dismissed artists (hide from On Deck)
-app.get('/api/dismissed-artists', (req, res) => {
-  const rows = db.prepare('SELECT artist FROM dismissed_artists ORDER BY dismissed_at DESC').all();
+app.get('/api/dismissed-artists', async (req, res) => {
+  const rows = await db.queryRows(`SELECT artist FROM dismissed_artists WHERE ${US(1)} ORDER BY dismissed_at DESC`, [req.userId]);
   res.json(rows.map(r => r.artist));
 });
 
-app.post('/api/dismissed-artists', (req, res) => {
+app.post('/api/dismissed-artists', async (req, res) => {
   const { artist } = req.body;
   if (!artist) return res.status(400).json({ error: 'Artist name required' });
-  try {
-    db.prepare('INSERT OR IGNORE INTO dismissed_artists (artist) VALUES (?)').run(artist);
-  } catch (err) { /* already exists */ }
-  const rows = db.prepare('SELECT artist FROM dismissed_artists ORDER BY dismissed_at DESC').all();
+  await db.query(
+    'INSERT INTO dismissed_artists (user_id, artist) VALUES ($1, $2) ON CONFLICT (user_id, artist) DO NOTHING',
+    [req.userId, artist]
+  );
+  const rows = await db.queryRows(`SELECT artist FROM dismissed_artists WHERE ${US(1)} ORDER BY dismissed_at DESC`, [req.userId]);
   res.json(rows.map(r => r.artist));
 });
 
-app.delete('/api/dismissed-artists/:artist', (req, res) => {
-  db.prepare('DELETE FROM dismissed_artists WHERE artist = ?').run(decodeURIComponent(req.params.artist));
-  const rows = db.prepare('SELECT artist FROM dismissed_artists ORDER BY dismissed_at DESC').all();
+app.delete('/api/dismissed-artists/:artist', async (req, res) => {
+  await db.query(`DELETE FROM dismissed_artists WHERE artist = $1 AND ${US(2)}`, [decodeURIComponent(req.params.artist), req.userId]);
+  const rows = await db.queryRows(`SELECT artist FROM dismissed_artists WHERE ${US(1)} ORDER BY dismissed_at DESC`, [req.userId]);
   res.json(rows.map(r => r.artist));
 });
 
@@ -393,37 +440,39 @@ Return ONLY the JSON, no markdown, no explanation.`,
 });
 
 // Distinct artist names from past concerts (for On Deck "Seen Before" matching)
-app.get('/api/past-artists', (req, res) => {
-  const rows = db.prepare(
+app.get('/api/past-artists', async (req, res) => {
+  const rows = await db.queryRows(
     `SELECT DISTINCT artist FROM concerts
-     WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)`
-  ).all();
+     WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+     AND ${US(1)}`,
+    [req.userId]
+  );
   res.json(rows.map(r => r.artist));
 });
 
 // Ticket art generation (programmatic SVG — no AI needed)
 const TICKET_STYLES = ['blue', 'gold', 'red', 'green', 'purple', 'teal', 'random'];
 
-app.post('/api/concerts/:id/generate-ticket', (req, res) => {
-  const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
+app.post('/api/concerts/:id/generate-ticket', async (req, res) => {
+  const concert = await db.queryRow(`SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!concert) return res.status(404).json({ error: 'Concert not found' });
   const style = TICKET_STYLES.includes(req.body.style) ? req.body.style : 'blue';
   try {
     const svg = generateTicketArt(concert, style);
-    db.prepare('UPDATE concerts SET ticket_art_svg = ? WHERE id = ?').run(svg, concert.id);
+    await db.query('UPDATE concerts SET ticket_art_svg = $1 WHERE id = $2', [svg, concert.id]);
     res.json({ ticket_art_svg: svg });
   } catch (err) {
     res.status(500).json({ error: 'Generation failed: ' + err.message });
   }
 });
 
-app.post('/api/upcoming/:id/generate-ticket', (req, res) => {
-  const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
+app.post('/api/upcoming/:id/generate-ticket', async (req, res) => {
+  const show = await db.queryRow(`SELECT * FROM upcoming WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!show) return res.status(404).json({ error: 'Show not found' });
   const style = TICKET_STYLES.includes(req.body.style) ? req.body.style : 'blue';
   try {
     const svg = generateTicketArt(show, style);
-    db.prepare('UPDATE upcoming SET ticket_art_svg = ? WHERE id = ?').run(svg, show.id);
+    await db.query('UPDATE upcoming SET ticket_art_svg = $1 WHERE id = $2', [svg, show.id]);
     res.json({ ticket_art_svg: svg });
   } catch (err) {
     res.status(500).json({ error: 'Generation failed: ' + err.message });
@@ -435,8 +484,8 @@ app.get('/api/ai-status', (req, res) => {
 });
 
 // Ticket image upload (concerts)
-app.post('/api/concerts/:id/ticket-image', ticketUpload.single('ticket'), (req, res) => {
-  const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
+app.post('/api/concerts/:id/ticket-image', ticketUpload.single('ticket'), async (req, res) => {
+  const concert = await db.queryRow(`SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!concert) return res.status(404).json({ error: 'Concert not found' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -446,13 +495,13 @@ app.post('/api/concerts/:id/ticket-image', ticketUpload.single('ticket'), (req, 
     if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
   }
 
-  db.prepare('UPDATE concerts SET ticket_image = ? WHERE id = ?').run(req.file.filename, concert.id);
+  await db.query('UPDATE concerts SET ticket_image = $1 WHERE id = $2', [req.file.filename, concert.id]);
   res.json({ ticket_image: req.file.filename });
 });
 
 // Delete ticket image (concerts)
-app.delete('/api/concerts/:id/ticket-image', (req, res) => {
-  const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
+app.delete('/api/concerts/:id/ticket-image', async (req, res) => {
+  const concert = await db.queryRow(`SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!concert) return res.status(404).json({ error: 'Concert not found' });
 
   if (concert.ticket_image) {
@@ -460,13 +509,13 @@ app.delete('/api/concerts/:id/ticket-image', (req, res) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 
-  db.prepare('UPDATE concerts SET ticket_image = NULL WHERE id = ?').run(concert.id);
+  await db.query('UPDATE concerts SET ticket_image = NULL WHERE id = $1', [concert.id]);
   res.json({ success: true });
 });
 
 // Ticket image upload (upcoming)
-app.post('/api/upcoming/:id/ticket-image', ticketUpload.single('ticket'), (req, res) => {
-  const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
+app.post('/api/upcoming/:id/ticket-image', ticketUpload.single('ticket'), async (req, res) => {
+  const show = await db.queryRow(`SELECT * FROM upcoming WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!show) return res.status(404).json({ error: 'Show not found' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -475,13 +524,13 @@ app.post('/api/upcoming/:id/ticket-image', ticketUpload.single('ticket'), (req, 
     if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
   }
 
-  db.prepare('UPDATE upcoming SET ticket_image = ? WHERE id = ?').run(req.file.filename, show.id);
+  await db.query('UPDATE upcoming SET ticket_image = $1 WHERE id = $2', [req.file.filename, show.id]);
   res.json({ ticket_image: req.file.filename });
 });
 
 // Delete ticket image (upcoming)
-app.delete('/api/upcoming/:id/ticket-image', (req, res) => {
-  const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
+app.delete('/api/upcoming/:id/ticket-image', async (req, res) => {
+  const show = await db.queryRow(`SELECT * FROM upcoming WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!show) return res.status(404).json({ error: 'Show not found' });
 
   if (show.ticket_image) {
@@ -489,13 +538,13 @@ app.delete('/api/upcoming/:id/ticket-image', (req, res) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 
-  db.prepare('UPDATE upcoming SET ticket_image = NULL WHERE id = ?').run(show.id);
+  await db.query('UPDATE upcoming SET ticket_image = NULL WHERE id = $1', [show.id]);
   res.json({ success: true });
 });
 
 // Poster image upload (concerts)
-app.post('/api/concerts/:id/poster-image', posterUpload.single('poster'), (req, res) => {
-  const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
+app.post('/api/concerts/:id/poster-image', posterUpload.single('poster'), async (req, res) => {
+  const concert = await db.queryRow(`SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!concert) return res.status(404).json({ error: 'Concert not found' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -504,13 +553,13 @@ app.post('/api/concerts/:id/poster-image', posterUpload.single('poster'), (req, 
     if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
   }
 
-  db.prepare('UPDATE concerts SET poster_image = ? WHERE id = ?').run(req.file.filename, concert.id);
+  await db.query('UPDATE concerts SET poster_image = $1 WHERE id = $2', [req.file.filename, concert.id]);
   res.json({ poster_image: req.file.filename });
 });
 
 // Delete poster image (concerts)
-app.delete('/api/concerts/:id/poster-image', (req, res) => {
-  const concert = db.prepare('SELECT * FROM concerts WHERE id = ?').get(req.params.id);
+app.delete('/api/concerts/:id/poster-image', async (req, res) => {
+  const concert = await db.queryRow(`SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!concert) return res.status(404).json({ error: 'Concert not found' });
 
   if (concert.poster_image) {
@@ -518,13 +567,13 @@ app.delete('/api/concerts/:id/poster-image', (req, res) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 
-  db.prepare('UPDATE concerts SET poster_image = NULL WHERE id = ?').run(concert.id);
+  await db.query('UPDATE concerts SET poster_image = NULL WHERE id = $1', [concert.id]);
   res.json({ success: true });
 });
 
 // Poster image upload (upcoming)
-app.post('/api/upcoming/:id/poster-image', posterUpload.single('poster'), (req, res) => {
-  const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
+app.post('/api/upcoming/:id/poster-image', posterUpload.single('poster'), async (req, res) => {
+  const show = await db.queryRow(`SELECT * FROM upcoming WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!show) return res.status(404).json({ error: 'Show not found' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -533,13 +582,13 @@ app.post('/api/upcoming/:id/poster-image', posterUpload.single('poster'), (req, 
     if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
   }
 
-  db.prepare('UPDATE upcoming SET poster_image = ? WHERE id = ?').run(req.file.filename, show.id);
+  await db.query('UPDATE upcoming SET poster_image = $1 WHERE id = $2', [req.file.filename, show.id]);
   res.json({ poster_image: req.file.filename });
 });
 
 // Delete poster image (upcoming)
-app.delete('/api/upcoming/:id/poster-image', (req, res) => {
-  const show = db.prepare('SELECT * FROM upcoming WHERE id = ?').get(req.params.id);
+app.delete('/api/upcoming/:id/poster-image', async (req, res) => {
+  const show = await db.queryRow(`SELECT * FROM upcoming WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
   if (!show) return res.status(404).json({ error: 'Show not found' });
 
   if (show.poster_image) {
@@ -547,7 +596,7 @@ app.delete('/api/upcoming/:id/poster-image', (req, res) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 
-  db.prepare('UPDATE upcoming SET poster_image = NULL WHERE id = ?').run(show.id);
+  await db.query('UPDATE upcoming SET poster_image = NULL WHERE id = $1', [show.id]);
   res.json({ success: true });
 });
 
@@ -761,64 +810,103 @@ function generateTicketArt(concert, style) {
 
 // Tickets endpoint (combined concerts + upcoming for carousel)
 // Exclude festival children — show ONE ticket per festival (the parent)
-app.get('/api/tickets', (req, res) => {
-  const concerts = db.prepare(`SELECT id, artist, venue, city, date, price, rating, last_minute, ticket_art_svg, ticket_image, poster_image, 'past' as type FROM concerts WHERE parent_concert_id IS NULL ORDER BY date DESC`).all();
-  const upcomingShows = db.prepare(`SELECT id, artist, venue, city, date, price, NULL as rating, last_minute, ticket_art_svg, ticket_image, poster_image, 'upcoming' as type FROM upcoming ORDER BY date ASC`).all();
+app.get('/api/tickets', async (req, res) => {
+  const uid = req.userId;
+  const concerts = await db.queryRows(
+    `SELECT id, artist, venue, city, date, price, rating, last_minute, ticket_art_svg, ticket_image, poster_image, 'past' as type FROM concerts WHERE parent_concert_id IS NULL AND ${US(1)} ORDER BY date DESC`,
+    [uid]
+  );
+  const upcomingShows = await db.queryRows(
+    `SELECT id, artist, venue, city, date, price, NULL as rating, last_minute, ticket_art_svg, ticket_image, poster_image, 'upcoming' as type FROM upcoming WHERE ${US(1)} ORDER BY date ASC`,
+    [uid]
+  );
   const all = [...upcomingShows, ...concerts];
   res.json(all);
 });
 
 // Export
-app.get('/api/export', (req, res) => {
-  const concerts = db.prepare('SELECT * FROM concerts').all();
-  const upcoming = db.prepare('SELECT * FROM upcoming').all();
-  const wishlist = db.prepare('SELECT * FROM wishlist').all();
+app.get('/api/export', async (req, res) => {
+  const uid = req.userId;
+  const concerts = await db.queryRows(`SELECT * FROM concerts WHERE ${US(1)}`, [uid]);
+  const upcoming = await db.queryRows(`SELECT * FROM upcoming WHERE ${US(1)}`, [uid]);
+  const wishlist = await db.queryRows(`SELECT * FROM wishlist WHERE ${US(1)}`, [uid]);
   res.setHeader('Content-Disposition', 'attachment; filename="giglog-export.json"');
   res.json({ concerts, upcoming, wishlist, exported_at: new Date().toISOString() });
 });
 
 // Import
-app.post('/api/import', (req, res) => {
+app.post('/api/import', async (req, res) => {
   const { concerts, upcoming, wishlist } = req.body;
   if (!concerts && !upcoming && !wishlist) {
     return res.status(400).json({ error: 'No data provided' });
   }
 
-  const importData = db.transaction(() => {
+  const uid = req.userId;
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
     let imported = { concerts: 0, upcoming: 0, wishlist: 0 };
 
     if (concerts && concerts.length) {
-      db.prepare('DELETE FROM concerts').run();
-      const stmt = db.prepare('INSERT INTO concerts (artist, venue, city, date, price, rating, notes, last_minute, setlist_fm_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      // Only delete current user's concerts (or unowned in dev mode)
+      if (uid) {
+        await client.query('DELETE FROM concerts WHERE user_id = $1', [uid]);
+      } else {
+        await client.query('DELETE FROM concerts');
+      }
       for (const c of concerts) {
-        stmt.run(c.artist, c.venue, c.city, c.date, c.price, c.rating, c.notes, c.last_minute ? 1 : 0, c.setlist_fm_id, c.created_at || new Date().toISOString());
+        await client.query(
+          'INSERT INTO concerts (user_id, artist, venue, city, date, price, rating, notes, last_minute, setlist_fm_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+          [uid, c.artist, c.venue, c.city, c.date, c.price, c.rating, c.notes, c.last_minute ? 1 : 0, c.setlist_fm_id, c.created_at || new Date().toISOString()]
+        );
       }
       imported.concerts = concerts.length;
     }
 
     if (upcoming && upcoming.length) {
-      db.prepare('DELETE FROM upcoming').run();
-      const stmt = db.prepare('INSERT INTO upcoming (artist, venue, city, date, price, section, last_minute, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      if (uid) {
+        await client.query('DELETE FROM upcoming WHERE user_id = $1', [uid]);
+      } else {
+        await client.query('DELETE FROM upcoming');
+      }
       for (const u of upcoming) {
-        stmt.run(u.artist, u.venue, u.city, u.date, u.price, u.section, u.last_minute ? 1 : 0, u.notes, u.created_at || new Date().toISOString());
+        await client.query(
+          'INSERT INTO upcoming (user_id, artist, venue, city, date, price, section, last_minute, notes, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+          [uid, u.artist, u.venue, u.city, u.date, u.price, u.section, u.last_minute ? 1 : 0, u.notes, u.created_at || new Date().toISOString()]
+        );
       }
       imported.upcoming = upcoming.length;
     }
 
     if (wishlist && wishlist.length) {
-      db.prepare('DELETE FROM wishlist').run();
-      const stmt = db.prepare('INSERT INTO wishlist (artist, priority, max_price, notes, created_at) VALUES (?, ?, ?, ?, ?)');
+      if (uid) {
+        await client.query('DELETE FROM wishlist WHERE user_id = $1', [uid]);
+      } else {
+        await client.query('DELETE FROM wishlist');
+      }
       for (const w of wishlist) {
-        stmt.run(w.artist, w.priority, w.max_price, w.notes, w.created_at || new Date().toISOString());
+        await client.query(
+          'INSERT INTO wishlist (user_id, artist, priority, max_price, notes, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+          [uid, w.artist, w.priority, w.max_price, w.notes, w.created_at || new Date().toISOString()]
+        );
       }
       imported.wishlist = wishlist.length;
     }
 
-    return imported;
-  });
+    await client.query('COMMIT');
+    res.json({ message: 'Import complete', imported });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
 
-  const result = importData();
-  res.json({ message: 'Import complete', imported: result });
+// Global error handler for unhandled async errors
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // Production: serve client build
@@ -830,6 +918,19 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`GigLog server running on http://localhost:${PORT}`);
+// Initialize database then start server
+db.init().then(() => {
+  // Now that db is initialized, set up session store
+  if (db.pool) {
+    const PgStore = connectPgSimple(session);
+    sessionConfig.store = new PgStore({ pool: db.pool, tableName: 'session', createTableIfMissing: true });
+  }
+  sessionMiddleware = session(sessionConfig);
+
+  app.listen(PORT, () => {
+    console.log(`GigLog server running on http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
 });

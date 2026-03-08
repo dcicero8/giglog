@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, Navigate } from 'react-router-dom'
+import { useAuth } from '../lib/AuthContext'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '◆' },
@@ -10,11 +11,24 @@ const navItems = [
   { to: '/artists', label: 'Artists', icon: '♪' },
   { to: '/songs', label: 'Songs', icon: '🎵' },
   { to: '/collection', label: 'Collection', icon: '🎫' },
+  { to: '/buddies', label: 'Buddies', icon: '👥' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ]
 
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { user, loading, authRequired, logout } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg">
+        <div className="text-text-muted text-lg">Loading...</div>
+      </div>
+    )
+  }
+
+  // If auth is configured but user isn't logged in, redirect to login
+  if (authRequired && !user) return <Navigate to="/login" replace />
 
   return (
     <div className="min-h-screen flex flex-col relative">
@@ -53,13 +67,31 @@ export default function Layout() {
               ))}
             </nav>
 
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="md:hidden p-2 text-text-muted hover:text-text rounded-lg hover:bg-white/5 border-0 bg-transparent cursor-pointer"
-            >
-              <span className="text-xl">{menuOpen ? '✕' : '☰'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {/* User avatar + logout (when auth is active) */}
+              {user && (
+                <div className="flex items-center gap-2">
+                  {user.avatar_url && (
+                    <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full" referrerPolicy="no-referrer" />
+                  )}
+                  <span className="hidden sm:inline text-sm text-text-muted">{user.name?.split(' ')[0]}</span>
+                  <button
+                    onClick={logout}
+                    className="text-xs text-text-muted hover:text-text px-2 py-1 rounded hover:bg-white/5 border-0 bg-transparent cursor-pointer"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+
+              {/* Mobile menu button */}
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="md:hidden p-2 text-text-muted hover:text-text rounded-lg hover:bg-white/5 border-0 bg-transparent cursor-pointer"
+              >
+                <span className="text-xl">{menuOpen ? '✕' : '☰'}</span>
+              </button>
+            </div>
           </div>
         </div>
 
