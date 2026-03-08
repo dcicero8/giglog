@@ -1,8 +1,15 @@
 import pg from 'pg';
-import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// better-sqlite3 is optional (native addon may not compile on all platforms)
+let Database;
+try {
+  Database = (await import('better-sqlite3')).default;
+} catch {
+  Database = null;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -152,6 +159,7 @@ async function initPostgres() {
 }
 
 function initSQLite() {
+  if (!Database) throw new Error('better-sqlite3 not available');
   const dbPath = path.join(__dirname, '..', 'data', 'giglog.db');
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -280,6 +288,11 @@ async function autoMigrateFromSQLite() {
 
   if (!sqlitePath) {
     console.log('[migration] No SQLite database found, starting fresh');
+    return;
+  }
+
+  if (!Database) {
+    console.log('[migration] SQLite found but better-sqlite3 not available, skipping auto-migration');
     return;
   }
 
