@@ -9,16 +9,14 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     fetch('/api/me', { credentials: 'include' })
-      .then(res => {
+      .then(async res => {
         if (res.status === 401) {
           // Auth is configured but user not logged in
           setAuthRequired(true)
           setUser(null)
-          return null
+          return
         }
-        return res.json()
-      })
-      .then(data => {
+        const data = await res.json()
         if (data === null) {
           // Dev mode — no auth configured
           setAuthRequired(false)
