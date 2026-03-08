@@ -6,8 +6,6 @@ async function request(path, options = {}) {
   })
 
   if (res.status === 401) {
-    // Redirect to login if session expired
-    window.location.href = '/login'
     throw new Error('Not authenticated')
   }
 
