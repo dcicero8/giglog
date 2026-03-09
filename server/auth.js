@@ -43,6 +43,7 @@ export function setupAuth(app) {
 
       done(null, user);
     } catch (err) {
+      console.error('[auth] OAuth verify error:', err);
       done(err);
     }
   }));
@@ -77,8 +78,9 @@ export function setupAuth(app) {
   app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/login' }),
     (req, res) => {
-      const returnTo = req.session.returnTo || '/';
-      delete req.session.returnTo;
+      const returnTo = req.session?.returnTo || '/';
+      if (req.session) delete req.session.returnTo;
+      console.log(`[auth] User logged in: ${req.user?.email} (id=${req.user?.id})`);
       res.redirect(returnTo);
     }
   );
