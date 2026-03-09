@@ -42,6 +42,13 @@ router.get('/invites', async (req, res) => {
 
 // Accept invite
 router.post('/accept/:code', async (req, res) => {
+  console.log(`[buddies] Accept invite attempt: code=${req.params.code}, userId=${req.userId}`);
+
+  if (!req.userId) {
+    console.log('[buddies] Accept failed: user not authenticated');
+    return res.status(401).json({ error: 'You must be logged in to accept an invite' });
+  }
+
   const invite = await db.queryRow(
     'SELECT * FROM buddy_invites WHERE code = $1',
     [req.params.code]
@@ -79,11 +86,13 @@ router.post('/accept/:code', async (req, res) => {
     );
 
     await client.query('COMMIT');
+    console.log(`[buddies] Buddy relationship created: user ${req.userId} <-> user ${invite.from_user_id}`);
 
     const inviter = await db.queryRow('SELECT name, avatar_url FROM users WHERE id = $1', [invite.from_user_id]);
     res.json({ success: true, buddy: inviter });
   } catch (err) {
     await client.query('ROLLBACK');
+    console.error('[buddies] Accept invite error:', err);
     throw err;
   } finally {
     client.release();
