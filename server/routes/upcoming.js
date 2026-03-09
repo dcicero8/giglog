@@ -3,7 +3,7 @@ import db from '../db.js';
 
 const router = Router();
 
-const US = (n) => `($${n}::int IS NULL OR user_id = $${n} OR user_id IS NULL)`;
+const US = (n) => `($${n}::int IS NULL OR user_id = $${n})`;
 
 // List all upcoming shows
 router.get('/', async (req, res) => {

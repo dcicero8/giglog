@@ -7,8 +7,8 @@ import db from '../db.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = Router();
 
-// User scope helper — shows own data + unclaimed migrated data + everything in dev mode
-const US = (n) => `($${n}::int IS NULL OR user_id = $${n} OR user_id IS NULL)`;
+// User scope helper — shows own data only (dev mode with null userId sees everything)
+const US = (n) => `($${n}::int IS NULL OR user_id = $${n})`;
 
 // Photo upload config
 const storage = multer.diskStorage({

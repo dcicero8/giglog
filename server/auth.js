@@ -41,6 +41,24 @@ export function setupAuth(app) {
         [googleId, email, name, avatarUrl]
       );
 
+      // Claim any unclaimed (user_id IS NULL) data for the first user
+      // This ensures the original user keeps their legacy data, while new buddies start fresh
+      try {
+        const firstUser = await db.queryRow('SELECT id FROM users ORDER BY id LIMIT 1');
+        if (firstUser && firstUser.id === user.id) {
+          const tables = ['concerts', 'upcoming', 'wishlist', 'dismissed_artists', 'concert_photos', 'external_links'];
+          for (const table of tables) {
+            const result = await db.query(`UPDATE ${table} SET user_id = $1 WHERE user_id IS NULL`, [user.id]);
+            if (result.rowCount > 0) {
+              console.log(`[auth] Claimed ${result.rowCount} unclaimed rows in ${table} for user ${user.id}`);
+            }
+          }
+        }
+      } catch (claimErr) {
+        console.error('[auth] Error claiming unclaimed data:', claimErr);
+        // Non-fatal — continue login even if claiming fails
+      }
+
       done(null, user);
     } catch (err) {
       console.error('[auth] OAuth verify error:', err);

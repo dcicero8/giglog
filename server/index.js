@@ -97,8 +97,8 @@ app.use('/api/setlistfm', setlistfmRouter);
 app.use('/api/songs', songsRouter);
 app.use('/api/buddies', buddiesRouter);
 
-// User scope helper — shows own data + unclaimed migrated data + everything in dev mode
-const US = (n) => `($${n}::int IS NULL OR user_id = $${n} OR user_id IS NULL)`;
+// User scope helper — shows own data only (dev mode with null userId sees everything)
+const US = (n) => `($${n}::int IS NULL OR user_id = $${n})`;
 
 // Stats endpoint for dashboard
 // Count children (individual bands) as shows, but not festival parents themselves
