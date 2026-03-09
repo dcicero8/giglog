@@ -148,12 +148,13 @@ export default function SetlistUrlInput({ url, onUrlChange, altUrl, onAltUrlChan
 
           {/* Artist dropdown */}
           {showDropdown && artists.length > 0 && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-bg-card border border-border rounded-lg shadow-xl max-h-64 overflow-y-auto">
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-bg border border-border rounded-lg shadow-xl max-h-64 overflow-y-auto">
               {artists.map((artist, i) => (
                 <button
                   key={artist.mbid || i}
                   onClick={() => selectArtist(artist)}
-                  className="w-full px-3 py-2 text-left text-sm text-text hover:bg-secondary/10 transition-colors cursor-pointer bg-transparent border-0 border-b border-border last:border-b-0 flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-sm text-text hover:bg-secondary/10 transition-colors cursor-pointer border-0 border-b border-border last:border-b-0 flex items-center gap-2"
+                  style={{ backgroundColor: 'var(--color-bg)' }}
                 >
                   <span className="font-medium">{artist.name}</span>
                   {artist.disambiguation && (
@@ -182,7 +183,7 @@ export default function SetlistUrlInput({ url, onUrlChange, altUrl, onAltUrlChan
                         key={setlist.id}
                         onClick={() => selectSetlist(setlist)}
                         disabled={loading}
-                        className="w-full px-3 py-2 text-left text-sm rounded-lg bg-bg-input/50 border border-border/50 hover:bg-secondary/10 hover:border-secondary/30 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-transparent flex items-center gap-3"
+                        className="w-full px-3 py-2 text-left text-sm rounded-lg bg-bg-input border border-border/50 hover:bg-secondary/10 hover:border-secondary/30 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-3"
                       >
                         <span className="text-secondary font-mono text-xs shrink-0 w-24">
                           {formatSetlistDate(setlist.eventDate)}
