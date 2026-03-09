@@ -122,9 +122,13 @@ export default function Buddies() {
             {invites.map(invite => (
               <div key={invite.id} className="bg-surface border border-border rounded-lg px-4 py-3 flex items-center justify-between text-sm">
                 <span className="font-mono text-text-muted">{invite.code}</span>
-                <span className={invite.accepted_by ? 'text-green-400' : 'text-yellow-400'}>
-                  {invite.accepted_by ? 'Accepted' : 'Pending'}
-                </span>
+                {invite.accepted_by ? (
+                  <span className="text-green-400">
+                    Accepted by {invite.accepted_by_name || 'someone'}
+                  </span>
+                ) : (
+                  <span className="text-yellow-400">Pending</span>
+                )}
               </div>
             ))}
           </div>

@@ -30,7 +30,7 @@ router.post('/invite', async (req, res) => {
 // List my pending invites
 router.get('/invites', async (req, res) => {
   const invites = await db.queryRows(
-    `SELECT id, code, created_at, accepted_at,
+    `SELECT id, code, created_at, accepted_by, accepted_at,
        (SELECT name FROM users WHERE id = accepted_by) as accepted_by_name
      FROM buddy_invites
      WHERE from_user_id = $1
