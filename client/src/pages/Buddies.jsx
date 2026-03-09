@@ -32,6 +32,11 @@ export default function Buddies() {
     setTimeout(() => setCopying(false), 2000)
   }
 
+  const deleteInvite = async (id) => {
+    await api.delete(`/buddies/invites/${id}`)
+    setInvites(await api.get('/buddies/invites'))
+  }
+
   const removeBuddy = async (id) => {
     if (!confirm('Remove this buddy? You will no longer see each other\'s data.')) return
     await api.delete(`/buddies/${id}`)
@@ -122,13 +127,22 @@ export default function Buddies() {
             {invites.map(invite => (
               <div key={invite.id} className="bg-surface border border-border rounded-lg px-4 py-3 flex items-center justify-between text-sm">
                 <span className="font-mono text-text-muted">{invite.code}</span>
-                {invite.accepted_by ? (
-                  <span className="text-green-400">
-                    Accepted by {invite.accepted_by_name || 'someone'}
-                  </span>
-                ) : (
-                  <span className="text-yellow-400">Pending</span>
-                )}
+                <div className="flex items-center gap-3">
+                  {invite.accepted_by ? (
+                    <span className="text-green-400">
+                      Accepted by {invite.accepted_by_name || 'someone'}
+                    </span>
+                  ) : (
+                    <span className="text-yellow-400">Pending</span>
+                  )}
+                  <button
+                    onClick={() => deleteInvite(invite.id)}
+                    className="p-1 text-text-muted hover:text-red-400 transition-colors border-0 bg-transparent cursor-pointer"
+                    title="Delete invite"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             ))}
           </div>

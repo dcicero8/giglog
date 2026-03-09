@@ -40,6 +40,18 @@ router.get('/invites', async (req, res) => {
   res.json(invites);
 });
 
+// Delete an invite
+router.delete('/invites/:id', async (req, res) => {
+  const invite = await db.queryRow(
+    'SELECT * FROM buddy_invites WHERE id = $1 AND from_user_id = $2',
+    [req.params.id, req.userId]
+  );
+  if (!invite) return res.status(404).json({ error: 'Invite not found' });
+
+  await db.query('DELETE FROM buddy_invites WHERE id = $1', [invite.id]);
+  res.json({ success: true });
+});
+
 // Accept invite
 router.post('/accept/:code', async (req, res) => {
   console.log(`[buddies] Accept invite attempt: code=${req.params.code}, userId=${req.userId}`);
