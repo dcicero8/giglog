@@ -407,6 +407,25 @@ const db = {
       }
     }
     if (cleaned > 0) console.log(`[startup] Cleaned ${cleaned} festival act(s) with empty/missing setlist data`);
+
+    // ── Claim unclaimed data for the first user ──
+    // Legacy data from before multi-user has user_id IS NULL — assign it to the first registered user
+    if (mode === 'pg') {
+      try {
+        const firstUser = await db.queryRow('SELECT id FROM users ORDER BY id LIMIT 1');
+        if (firstUser) {
+          const tables = ['concerts', 'upcoming', 'wishlist', 'dismissed_artists', 'concert_photos', 'external_links'];
+          for (const table of tables) {
+            const result = await db.query(`UPDATE ${table} SET user_id = $1 WHERE user_id IS NULL`, [firstUser.id]);
+            if (result.rowCount > 0) {
+              console.log(`[startup] Claimed ${result.rowCount} unclaimed rows in ${table} for user ${firstUser.id}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[startup] Error claiming unclaimed data:', err);
+      }
+    }
   }
 };
 
