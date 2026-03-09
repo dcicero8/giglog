@@ -71,6 +71,44 @@ export function useSetlistImport() {
     }
   }
 
+  // Import directly by setlist ID (used by the search UI)
+  const importById = async (id) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.get(`/setlistfm/setlist/${id}`)
+
+      let isoDate = ''
+      if (data.eventDate) {
+        const [d, m, y] = data.eventDate.split('-')
+        isoDate = `${y}-${m}-${d}`
+      }
+
+      const city = [data.venue?.city?.name, data.venue?.city?.stateCode || data.venue?.city?.state, data.venue?.city?.country?.code]
+        .filter(Boolean).join(', ')
+
+      const tourNote = data.tour?.name ? `Tour: ${data.tour.name}` : ''
+
+      return {
+        artist: data.artist?.name || '',
+        venue: data.venue?.name || '',
+        city,
+        date: isoDate,
+        price: '',
+        rating: 0,
+        notes: tourNote,
+        last_minute: false,
+        setlist_fm_id: id,
+        setlist_fm_url: data.url || `https://www.setlist.fm/setlist/${id}.html`,
+      }
+    } catch (err) {
+      setError(err.message)
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const importFestival = async () => {
     const id = parseSetlistUrl(setlistUrl)
     if (!id) {
@@ -93,5 +131,5 @@ export function useSetlistImport() {
     }
   }
 
-  return { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading, error, setError, importUrl, importFestival }
+  return { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading, error, setError, importUrl, importById, importFestival }
 }

@@ -16,7 +16,7 @@ export default function Dashboard() {
   const { data: concerts, refetch: refetchConcerts } = useApi('/concerts')
   const { data: wishlist } = useApi('/wishlist')
   const { data: tickets } = useApi('/tickets')
-  const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: importLoading, error: importError, setError, importUrl, importFestival } = useSetlistImport()
+  const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: importLoading, error: importError, setError, importUrl, importById, importFestival } = useSetlistImport()
   const navigate = useNavigate()
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -25,6 +25,14 @@ export default function Dashboard() {
 
   const handleImport = async () => {
     const result = await importUrl()
+    if (result) {
+      setForm(result)
+      setModalOpen(true)
+    }
+  }
+
+  const handleImportById = async (setlistId) => {
+    const result = await importById(setlistId)
     if (result) {
       setForm(result)
       setModalOpen(true)
@@ -82,6 +90,7 @@ export default function Dashboard() {
           altUrl={altSetlistUrl}
           onAltUrlChange={setAltSetlistUrl}
           onImport={handleImport}
+          onImportById={handleImportById}
           onFestivalImport={handleFestivalImport}
           loading={importLoading}
           error={importError}
