@@ -28,7 +28,7 @@ export default function Login() {
 
       <div className="relative z-10 text-center space-y-8">
         <div>
-          <img src="/giglog-logo.png" alt="GigLog" className="w-80 mx-auto mb-2" />
+          <h1 className="text-5xl font-bold font-heading text-accent tracking-tight mb-2">GigLog</h1>
           <p className="text-text-muted text-lg">Never miss a concert again</p>
         </div>
 

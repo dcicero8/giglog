@@ -64,8 +64,10 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <img src="/giglog-logo.png" alt="GigLog" className="h-12" />
+      <div className="flex items-baseline gap-3 mb-6">
+        <h1 className="text-3xl font-heading font-bold text-text">
+          <span className="text-accent">Gig</span>Log
+        </h1>
         <p className="text-sm text-text-muted">Never miss a concert again</p>
       </div>
 
