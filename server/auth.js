@@ -20,6 +20,10 @@ export function setupAuth(app) {
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL,
+    // Trust the X-Forwarded-Proto header from Railway's reverse proxy so the
+    // redirect_uri is built as https:// (not http://) when callbackURL is relative.
+    // Otherwise Google rejects the request with redirect_uri_mismatch.
+    proxy: true,
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       const googleId = profile.id;

@@ -177,7 +177,7 @@ export default function SetlistUrlInput({ url, onUrlChange, altUrl, onAltUrlChan
                   <p className="text-xs text-text-dim mb-2">
                     Recent setlists for <span className="text-text font-medium">{selectedArtist.name}</span> — tap to import
                     {selectedArtist.url && (
-                      <> · <a href={`https://www.setlist.fm${selectedArtist.url}`} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">View all on setlist.fm →</a></>
+                      <> · <a href={selectedArtist.url.startsWith('http') ? selectedArtist.url : `https://www.setlist.fm${selectedArtist.url}`} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">View all on setlist.fm →</a></>
                     )}
                     {!selectedArtist.url && (
                       <> · <a href={`https://www.setlist.fm/search?query=${encodeURIComponent(selectedArtist.name)}`} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">View all on setlist.fm →</a></>
