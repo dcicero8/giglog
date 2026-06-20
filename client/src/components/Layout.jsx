@@ -36,9 +36,9 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col relative">
       {/* Ambient glows */}
-      <div className="fixed top-0 right-0 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none opacity-20"
+      <div className="ambient-glow fixed top-0 right-0 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none opacity-20"
         style={{ background: 'radial-gradient(circle, #ff3c64 0%, transparent 70%)' }} />
-      <div className="fixed bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none opacity-15"
+      <div className="ambient-glow fixed bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none opacity-15"
         style={{ background: 'radial-gradient(circle, #a78bfa 0%, transparent 70%)' }} />
 
       {/* Header */}

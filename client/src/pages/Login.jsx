@@ -1,8 +1,10 @@
 import { useAuth } from '../lib/AuthContext'
 import { Navigate } from 'react-router-dom'
+import { useTheme } from '../lib/theme'
 
 export default function Login() {
   const { user, loading, authRequired } = useAuth()
+  const { theme, toggle } = useTheme()
 
   if (loading) {
     return (
@@ -20,10 +22,20 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg relative overflow-hidden">
+      {/* Theme toggle */}
+      <button
+        onClick={toggle}
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        className="absolute top-4 right-4 z-20 p-2 text-text-muted hover:text-text rounded-lg hover:bg-white/5 border-0 bg-transparent cursor-pointer text-lg leading-none"
+      >
+        {theme === 'dark' ? '☀' : '☾'}
+      </button>
+
       {/* Ambient glows */}
-      <div className="fixed top-0 right-0 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none opacity-20"
+      <div className="ambient-glow fixed top-0 right-0 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none opacity-20"
         style={{ background: 'radial-gradient(circle, #ff3c64 0%, transparent 70%)' }} />
-      <div className="fixed bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none opacity-15"
+      <div className="ambient-glow fixed bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none opacity-15"
         style={{ background: 'radial-gradient(circle, #a78bfa 0%, transparent 70%)' }} />
 
       <div className="relative z-10 text-center space-y-8">
