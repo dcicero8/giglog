@@ -7,7 +7,6 @@ import CountdownBadge from '../components/CountdownBadge'
 import StarRating from '../components/StarRating'
 import SetlistUrlInput from '../components/SetlistUrlInput'
 import Modal from '../components/Modal'
-import TicketCarousel from '../components/TicketCarousel'
 import FestivalImportModal from '../components/FestivalImportModal'
 
 export default function Dashboard() {
@@ -15,7 +14,6 @@ export default function Dashboard() {
   const { data: upcoming } = useApi('/upcoming')
   const { data: concerts, refetch: refetchConcerts } = useApi('/concerts')
   const { data: wishlist } = useApi('/wishlist')
-  const { data: tickets } = useApi('/tickets')
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: importLoading, error: importError, setError, importUrl, importById, importFestival } = useSetlistImport()
   const navigate = useNavigate()
 
@@ -61,6 +59,8 @@ export default function Dashboard() {
   const nextShows = upcoming?.slice(0, 3) || []
   const recentConcerts = concerts?.slice(0, 5) || []
   const topWishlist = wishlist?.slice(0, 3) || []
+  // Posters from the most recent shows that have one (concerts come back newest-first)
+  const recentPosters = (concerts || []).filter(c => c.poster_image).slice(0, 6)
 
   return (
     <div>
@@ -71,17 +71,33 @@ export default function Dashboard() {
         <p className="text-sm text-text-muted">Never miss a concert again</p>
       </div>
 
-      {/* Ticket Carousel */}
-      {tickets && tickets.length > 0 && (
+      {/* Recent show posters */}
+      {recentPosters.length > 0 && (
         <section className="mb-10">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-heading font-bold text-text">Your Collection</h2>
+            <h2 className="text-lg font-heading font-bold text-text">Recent Posters</h2>
             <Link to="/collection" className="text-sm text-text-muted hover:text-secondary no-underline">View All →</Link>
           </div>
-          <TicketCarousel
-            tickets={tickets.slice(0, 15)}
-            onTicketClick={(t) => navigate(t.type === 'past' ? `/concerts?highlight=${t.id}` : `/upcoming?highlight=${t.id}`)}
-          />
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {recentPosters.map(c => (
+              <button
+                key={c.id}
+                onClick={() => navigate(`/concerts?highlight=${c.id}`)}
+                title={`${c.artist}${c.date ? ' · ' + new Date(c.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''}`}
+                className="group relative block aspect-[3/4] rounded-xl overflow-hidden border border-border bg-bg-card cursor-pointer p-0"
+              >
+                <img
+                  src={`/uploads/posters/${c.poster_image}`}
+                  alt={`${c.artist} poster`}
+                  loading="lazy"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-[11px] font-semibold text-white truncate">{c.artist}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
