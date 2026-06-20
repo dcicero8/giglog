@@ -133,7 +133,7 @@ app.get('/api/insights', async (req, res) => {
       AND ${US(1)}
   `, [uid]);
 
-  const byYear = {}, byMonth = {}, artistCount = {}, venueCount = {};
+  const byYear = {}, byMonth = {}, artistCount = {}, venueVisits = {};
   const cities = new Set(), states = new Set(), countries = new Set();
   for (const r of rows) {
     if (r.date) {
@@ -142,7 +142,11 @@ app.get('/api/insights', async (req, res) => {
       if (m >= 1 && m <= 12) byMonth[m] = (byMonth[m] || 0) + 1;
     }
     if (r.artist) artistCount[r.artist] = (artistCount[r.artist] || 0) + 1;
-    if (r.venue) venueCount[r.venue] = (venueCount[r.venue] || 0) + 1;
+    // Venue "visits" = distinct days, so a festival's many acts on one day count once
+    if (r.venue) {
+      if (!venueVisits[r.venue]) venueVisits[r.venue] = new Set();
+      venueVisits[r.venue].add(r.date || ('id:' + r.id));
+    }
     if (r.city) {
       cities.add(r.city);
       const parts = r.city.split(',').map(s => s.trim()).filter(Boolean);
@@ -168,7 +172,10 @@ app.get('/api/insights', async (req, res) => {
     showsByYear,
     showsByMonth,
     topArtists: rank(artistCount).slice(0, 12),
-    topVenues: rank(venueCount).slice(0, 12),
+    topVenues: Object.entries(venueVisits)
+      .map(([name, set]) => ({ name, count: set.size }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 12),
     locations: { cities: cities.size, states: states.size, countries: countries.size },
     onThisDay,
   });
@@ -227,7 +234,7 @@ app.get('/api/venues', async (req, res) => {
   const uid = req.userId;
   // Real concerts only (exclude festival parent containers) that have a venue
   const rows = await db.queryRows(`
-    SELECT venue, city, date, price, rating, artist FROM concerts
+    SELECT id, venue, city, date, price, rating, artist FROM concerts
       WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
       AND venue IS NOT NULL AND venue <> ''
       AND ${US(1)}
@@ -240,10 +247,11 @@ app.get('/api/venues', async (req, res) => {
   const map = {};
   for (const row of rows) {
     if (!map[row.venue]) {
-      map[row.venue] = { venue: row.venue, city: row.city || null, showCount: 0, totalSpent: 0, showRatings: [], dates: [], artists: new Set() };
+      map[row.venue] = { venue: row.venue, city: row.city || null, visits: new Set(), totalSpent: 0, showRatings: [], dates: [], artists: new Set() };
     }
     const entry = map[row.venue];
-    entry.showCount++;
+    // Count a "visit" per distinct day, so a festival's many acts on one day = one visit
+    entry.visits.add(row.date || ('id:' + row.id));
     if (row.price) entry.totalSpent += parseFloat(row.price);
     if (row.rating) entry.showRatings.push(row.rating);
     if (row.date) entry.dates.push(row.date);
@@ -254,7 +262,7 @@ app.get('/api/venues', async (req, res) => {
   const result = Object.values(map).map(v => ({
     venue: v.venue,
     city: v.city,
-    showCount: v.showCount,
+    showCount: v.visits.size,
     artistCount: v.artists.size,
     totalSpent: Math.round(v.totalSpent * 100) / 100,
     avgShowRating: v.showRatings.length ? Math.round((v.showRatings.reduce((s, r) => s + r, 0) / v.showRatings.length) * 10) / 10 : null,
