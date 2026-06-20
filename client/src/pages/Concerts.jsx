@@ -234,8 +234,13 @@ export default function Concerts() {
         </div>
       )}
 
-      {/* Quick add from setlist.fm URL */}
+      {/* Quick add from setlist.fm — the easiest way to add a show */}
       <div className="mb-6">
+        <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-sm font-semibold text-text">⚡ Easiest way to add a show</span>
+          <span className="text-xs text-text-muted">— search the artist below and import the setlist in one tap</span>
+        </div>
+        <div className="rounded-xl ring-1 ring-accent/40">
         <SetlistUrlInput
           url={setlistUrl}
           onUrlChange={setSetlistUrl}
@@ -247,6 +252,7 @@ export default function Concerts() {
           error={setlistError}
           onClearError={() => setSetlistError(null)}
         />
+        </div>
       </div>
 
       {/* Filters */}

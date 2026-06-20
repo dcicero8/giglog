@@ -7,7 +7,7 @@ export default function Venues() {
   const { data, loading } = useApi('/venues')
   const [venues, setVenues] = useState([])
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState('alpha')
+  const [sortBy, setSortBy] = useState('rating')
 
   // Keep a local copy so rating changes can update instantly (optimistic)
   useEffect(() => { setVenues(data || []) }, [data])
@@ -52,9 +52,9 @@ export default function Venues() {
           onChange={e => setSortBy(e.target.value)}
           className="px-3 py-1.5 text-xs rounded-lg bg-bg-input border border-border text-text cursor-pointer"
         >
+          <option value="rating">Top Rated</option>
           <option value="alpha">A–Z</option>
           <option value="shows">Most Shows</option>
-          <option value="rating">Top Rated</option>
           <option value="recent">Most Recent</option>
         </select>
 
