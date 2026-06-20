@@ -422,6 +422,7 @@ export default function Concerts() {
                     aiAvailable={aiAvailable}
                     onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
                     onAddDay={handleAddDay}
+                    onRefetch={fetchConcerts}
                   />
                 ) : (
                   <ConcertCard

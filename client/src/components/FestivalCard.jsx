@@ -4,7 +4,7 @@ import { getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } fr
 import StarRating from './StarRating'
 import SetlistViewer from './SetlistViewer'
 
-export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onAddDay }) {
+export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onAddDay, onRefetch }) {
   const [expanded, setExpanded] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [posterUploading, setPosterUploading] = useState(false)
@@ -160,7 +160,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
   }
 
   const handleDeleteChild = async (child) => {
-    if (!window.confirm(`Remove ${child.artist} from this festival?`)) return
+    if (!window.confirm(`Delete ${child.artist} permanently? This removes the show from your history.`)) return
     try {
       await api.delete(`/concerts/${child.id}`)
       const updatedChildren = children.filter(c => c.id !== child.id)
@@ -168,6 +168,28 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
       onUpdate?.({ ...concert, children: updatedChildren })
     } catch (err) {
       alert('Failed to remove: ' + err.message)
+    }
+  }
+
+  // Pull a single band out of the festival — it becomes a standalone show (not deleted)
+  const handleDetachChild = async (child) => {
+    if (!window.confirm(`Pull ${child.artist} out of this festival? It becomes a separate show (nothing is deleted).`)) return
+    try {
+      await api.post(`/concerts/${child.id}/detach`)
+      onRefetch?.()
+    } catch (err) {
+      alert('Failed to detach: ' + err.message)
+    }
+  }
+
+  // Ungroup the whole festival — all shows become standalone again, container removed
+  const handleUngroup = async () => {
+    if (!window.confirm(`Ungroup "${concert.artist}"? Its ${children.length} shows become separate concerts again (nothing is deleted).`)) return
+    try {
+      await api.post(`/concerts/${concert.id}/ungroup`)
+      onRefetch?.()
+    } catch (err) {
+      alert('Failed to ungroup: ' + err.message)
     }
   }
 
@@ -262,9 +284,16 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             ♫
           </a>
           <button
+            onClick={() => handleDetachChild(child)}
+            className="px-1.5 py-0.5 text-[10px] rounded bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer"
+            title={`Pull ${child.artist} out into its own show (keeps it)`}
+          >
+            ⤴
+          </button>
+          <button
             onClick={() => handleDeleteChild(child)}
             className="px-1.5 py-0.5 text-[10px] rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors border-0 cursor-pointer"
-            title={`Remove ${child.artist}`}
+            title={`Delete ${child.artist} permanently`}
           >
             ✕
           </button>
@@ -344,7 +373,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-sm text-text-muted mb-3">
+        <div className="flex items-center gap-3 text-sm text-text-muted mb-2">
           <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/20 text-warning">
             {isMultiDay ? 'Multi-Day Festival' : 'Festival'} · {children.length} artist{children.length !== 1 ? 's' : ''}
           </span>
@@ -352,6 +381,13 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/20 text-warning">Last-Minute</span>
           )}
         </div>
+
+        {/* Artist lineup, visible without expanding */}
+        {children.length > 0 && (
+          <p className="text-sm text-text-muted mb-3 leading-relaxed">
+            {children.map(c => c.artist).join(' · ')}
+          </p>
+        )}
 
         {/* Upload Ticket + Poster + Add Day buttons */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -391,6 +427,13 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
               + Add Day
             </button>
           )}
+          <button
+            onClick={handleUngroup}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-bg-input text-text-muted hover:text-text hover:bg-bg-card-hover transition-colors border border-border cursor-pointer"
+            title="Split this festival back into separate shows (nothing is deleted)"
+          >
+            ⤴ Ungroup
+          </button>
         </div>
 
         {/* Expand/Collapse Band List */}

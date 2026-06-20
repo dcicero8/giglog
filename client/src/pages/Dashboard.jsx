@@ -14,6 +14,9 @@ export default function Dashboard() {
   const { data: upcoming } = useApi('/upcoming')
   const { data: concerts, refetch: refetchConcerts } = useApi('/concerts')
   const { data: wishlist } = useApi('/wishlist')
+  const { data: artists } = useApi('/artists')
+  const { data: venues } = useApi('/venues')
+  const { data: songsData } = useApi('/songs')
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: importLoading, error: importError, setError, importUrl, importById, importFestival } = useSetlistImport()
   const navigate = useNavigate()
 
@@ -61,6 +64,9 @@ export default function Dashboard() {
   const topWishlist = wishlist?.slice(0, 3) || []
   // Posters from the most recent shows that have one (concerts come back newest-first)
   const recentPosters = (concerts || []).filter(c => c.poster_image).slice(0, 6)
+  const artistsSeen = artists ? artists.filter(a => a.showCount > 0).length : null
+  const venuesAttended = venues ? venues.length : null
+  const songsHeard = songsData?.stats?.totalSongs ?? null
 
   return (
     <div>
@@ -120,9 +126,9 @@ export default function Dashboard() {
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
         <StatCard label="Shows Attended" value={stats?.concertCount ?? '—'} />
-        <StatCard label="Total Spent" value={stats?.totalSpent ? `$${stats.totalSpent.toFixed(0)}` : '—'} color="text-success" />
-        <StatCard label="Avg Ticket" value={stats?.avgPrice ? `$${stats.avgPrice.toFixed(0)}` : '—'} />
-        <StatCard label="Avg Last-Min" value={stats?.avgLastMinutePrice ? `$${stats.avgLastMinutePrice.toFixed(0)}` : '—'} color="text-warning" />
+        <StatCard label="Artists Seen" value={artistsSeen ?? '—'} color="text-success" />
+        <StatCard label="Venues Attended" value={venuesAttended ?? '—'} />
+        <StatCard label="Songs Heard" value={songsHeard ?? '—'} color="text-warning" />
         <StatCard label="Upcoming" value={stats?.upcomingCount ?? '—'} color="text-secondary" />
         <StatCard label="Wishlist" value={stats?.wishlistCount ?? '—'} color="text-accent" />
       </div>

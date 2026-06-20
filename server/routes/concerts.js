@@ -150,6 +150,31 @@ router.post('/combine', async (req, res) => {
   res.status(201).json({ ...parent, children });
 });
 
+// Ungroup a festival — detach all its shows (they become standalone) and remove the container
+router.post('/:id/ungroup', async (req, res) => {
+  const parent = await db.queryRow(`SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
+  if (!parent) return res.status(404).json({ error: 'Festival not found' });
+  await db.query('UPDATE concerts SET parent_concert_id = NULL WHERE parent_concert_id = $1', [parent.id]);
+  await db.query('DELETE FROM concerts WHERE id = $1', [parent.id]);
+  res.json({ message: 'Festival ungrouped' });
+});
+
+// Detach a single show from its festival (keeps the show). If fewer than 2 remain, dissolve the festival.
+router.post('/:id/detach', async (req, res) => {
+  const child = await db.queryRow(`SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
+  if (!child) return res.status(404).json({ error: 'Concert not found' });
+  if (!child.parent_concert_id) return res.status(400).json({ error: 'Concert is not part of a festival' });
+  const parentId = child.parent_concert_id;
+  await db.query('UPDATE concerts SET parent_concert_id = NULL WHERE id = $1', [child.id]);
+  const remaining = await db.queryRows('SELECT id FROM concerts WHERE parent_concert_id = $1', [parentId]);
+  if (remaining.length < 2) {
+    await db.query('UPDATE concerts SET parent_concert_id = NULL WHERE parent_concert_id = $1', [parentId]);
+    await db.query('DELETE FROM concerts WHERE id = $1', [parentId]);
+    return res.json({ message: 'Detached; festival dissolved', dissolved: true });
+  }
+  res.json({ message: 'Detached', dissolved: false });
+});
+
 // Update concert
 router.put('/:id', async (req, res) => {
   const existing = await db.queryRow(
