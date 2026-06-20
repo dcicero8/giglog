@@ -10,23 +10,22 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
   const isAddDay = !!existingFestivalId
 
   const [festivalName, setFestivalName] = useState(data?.name || data?.tour || 'Festival')
-  // 'all' = every day at once; otherwise an index into days[]. Default to all days when multi-day.
-  const [dayIdx, setDayIdx] = useState(multiDay ? 'all' : 0)
+  // Which festival days to include — defaults to all (deselect any you didn't attend)
+  const [selectedDays, setSelectedDays] = useState(() => new Set(days.map((_, i) => i)))
 
-  // Flat list of the artists currently in view, each tagged with its own date
-  const isAll = dayIdx === 'all'
-  const viewArtists = isAll
-    ? days.flatMap(d => d.artists.map(a => ({ ...a, _date: d.date })))
-    : (days[dayIdx]?.artists || []).map(a => ({ ...a, _date: days[dayIdx].date }))
+  // Flatten the selected days' artists (in date order), each tagged with its own date
+  const sortedSelDays = [...selectedDays].sort((a, b) => a - b)
+  const viewArtists = sortedSelDays.flatMap(i => days[i].artists.map(a => ({ ...a, _date: days[i].date })))
+  const dayKey = sortedSelDays.join(',')
 
   const [selected, setSelected] = useState(() => new Set(viewArtists.map((_, i) => i)))
   const [importing, setImporting] = useState(false)
 
-  // Reset selection to "all of the current view" whenever the chosen day changes
+  // Reset artist selection to "all of the chosen days" whenever the day choice changes
   useEffect(() => {
-    const count = (dayIdx === 'all' ? days.flatMap(d => d.artists).length : (days[dayIdx]?.artists.length || 0))
-    setSelected(new Set(Array.from({ length: count }, (_, i) => i)))
-  }, [dayIdx]) // eslint-disable-line react-hooks/exhaustive-deps
+    const count = sortedSelDays.reduce((n, i) => n + (days[i]?.artists.length || 0), 0)
+    setSelected(new Set(Array.from({ length: count }, (_, k) => k)))
+  }, [dayKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!data) return null
 
@@ -40,6 +39,14 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
 
   const toggleAll = () => {
     setSelected(selected.size === viewArtists.length ? new Set() : new Set(viewArtists.map((_, i) => i)))
+  }
+
+  const toggleDay = (i) => {
+    setSelectedDays(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
   }
 
   const handleImport = async () => {
@@ -127,9 +134,11 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
     ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : ''
 
-  const headerDate = isAll
-    ? `${fmtShort(days[0]?.date)} – ${fmtShort(days[days.length - 1]?.date)}`
-    : fmtDay(days[dayIdx]?.date)
+  const selDates = sortedSelDays.map(i => days[i]?.date).filter(Boolean)
+  const headerDate = selDates.length > 1
+    ? `${fmtShort(selDates[0])} – ${fmtShort(selDates[selDates.length - 1])}`
+    : fmtDay(selDates[0])
+  const showDayHeaders = sortedSelDays.length > 1
 
   return (
     <Modal open={true} onClose={onClose} title={isAddDay ? 'Add Festival Day' : 'Festival Import'}>
@@ -151,38 +160,41 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
             <p className="text-sm font-medium text-warning">Adding to this festival</p>
           )}
           <p className="text-xs text-text-muted">{data.venue} · {data.city}</p>
-          <p className="text-xs text-text-muted">{headerDate}</p>
+          <p className="text-xs text-text-muted">{headerDate || '—'}</p>
           <p className="text-xs text-text-dim">
-            {viewArtists.length} artist{viewArtists.length !== 1 ? 's' : ''}{isAll && multiDay ? ` across ${days.length} days` : ''}
+            {viewArtists.length} artist{viewArtists.length !== 1 ? 's' : ''}{showDayHeaders ? ` across ${sortedSelDays.length} days` : ''}
           </p>
         </div>
 
-        {/* Day picker (multi-day festivals) */}
+        {/* Day picker — toggle the days you attended */}
         {multiDay && (
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-text-dim mb-1.5">Which day(s)?</label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[10px] uppercase tracking-wider text-text-dim">Which days did you go?</label>
               <button
-                onClick={() => setDayIdx('all')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
-                  isAll ? 'bg-warning/20 text-warning border-warning/40' : 'bg-bg-input text-text-muted border-border hover:text-text'
-                }`}
+                onClick={() => setSelectedDays(new Set(days.map((_, i) => i)))}
+                className="text-[11px] text-secondary hover:text-secondary bg-transparent border-0 cursor-pointer"
               >
-                All days
-                <span className="ml-1.5 text-text-dim">({days.flatMap(d => d.artists).length})</span>
+                Select all days
               </button>
-              {days.map((d, i) => (
-                <button
-                  key={d.date || i}
-                  onClick={() => setDayIdx(i)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
-                    i === dayIdx ? 'bg-warning/20 text-warning border-warning/40' : 'bg-bg-input text-text-muted border-border hover:text-text'
-                  }`}
-                >
-                  {fmtDay(d.date) || `Day ${i + 1}`}
-                  <span className="ml-1.5 text-text-dim">({d.artists.length})</span>
-                </button>
-              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {days.map((d, i) => {
+                const on = selectedDays.has(i)
+                return (
+                  <button
+                    key={d.date || i}
+                    onClick={() => toggleDay(i)}
+                    aria-pressed={on}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                      on ? 'bg-warning/20 text-warning border-warning/40' : 'bg-bg-input text-text-muted border-border hover:text-text'
+                    }`}
+                  >
+                    {on ? '✓ ' : ''}{fmtDay(d.date) || `Day ${i + 1}`}
+                    <span className="ml-1.5 text-text-dim">({d.artists.length})</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
@@ -191,21 +203,25 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
           <p className="text-xs text-warning">Some acts may be missing — setlist.fm's rate limit was hit while loading. Try again in a moment to fill in the rest.</p>
         )}
 
-        {/* Select all */}
+        {/* Artist select-all */}
         <div className="flex items-center justify-between">
           <button
             onClick={toggleAll}
-            className="text-xs text-secondary hover:text-secondary bg-transparent border-0 cursor-pointer"
+            disabled={viewArtists.length === 0}
+            className="text-xs text-secondary hover:text-secondary bg-transparent border-0 cursor-pointer disabled:opacity-40"
           >
-            {selected.size === viewArtists.length ? 'Deselect All' : 'Select All'}
+            {selected.size === viewArtists.length && viewArtists.length > 0 ? 'Deselect All' : 'Select All'}
           </button>
           <span className="text-xs text-text-dim">{selected.size} selected</span>
         </div>
 
-        {/* Artist list (grouped by day when importing all days) */}
+        {/* Artist list (grouped by day when more than one day is chosen) */}
         <div className="space-y-1 max-h-[50vh] overflow-y-auto">
+          {viewArtists.length === 0 && (
+            <p className="text-xs text-text-dim text-center py-4">Pick at least one day above.</p>
+          )}
           {viewArtists.map((artist, i) => {
-            const showHeader = isAll && multiDay && (i === 0 || viewArtists[i - 1]._date !== artist._date)
+            const showHeader = showDayHeaders && (i === 0 || viewArtists[i - 1]._date !== artist._date)
             return (
               <Fragment key={`${artist.setlist_fm_id}-${i}`}>
                 {showHeader && (
