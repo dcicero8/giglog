@@ -17,6 +17,7 @@ export default function Dashboard() {
   const { data: artists } = useApi('/artists')
   const { data: venues } = useApi('/venues')
   const { data: songsData } = useApi('/songs')
+  const { data: insights } = useApi('/insights')
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: importLoading, error: importError, setError, importUrl, importById, importFestival } = useSetlistImport()
   const navigate = useNavigate()
 
@@ -67,6 +68,8 @@ export default function Dashboard() {
   const artistsSeen = artists ? artists.filter(a => a.showCount > 0).length : null
   const venuesAttended = venues ? venues.length : null
   const songsHeard = songsData?.stats?.totalSongs ?? null
+  const onThisDay = insights?.onThisDay || []
+  const thisYear = new Date().getFullYear()
 
   return (
     <div>
@@ -76,6 +79,33 @@ export default function Dashboard() {
         </h1>
         <p className="text-sm text-text-muted">Never miss a concert again</p>
       </div>
+
+      {/* On This Day */}
+      {onThisDay.length > 0 && (
+        <section className="mb-8 bg-bg-card border border-border rounded-xl p-4">
+          <h2 className="text-sm font-heading font-bold text-text mb-3">📅 On This Day</h2>
+          <div className="space-y-1">
+            {onThisDay.map(s => {
+              const yearsAgo = thisYear - parseInt(s.date.slice(0, 4), 10)
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => navigate(`/concerts?highlight=${s.id}`)}
+                  className="w-full flex items-center gap-3 text-left bg-transparent border-0 cursor-pointer p-1.5 rounded-lg hover:bg-bg-card-hover transition-colors"
+                >
+                  <span className="text-xs text-accent font-semibold w-[72px] shrink-0">
+                    {yearsAgo <= 0 ? 'Today' : `${yearsAgo} yr${yearsAgo !== 1 ? 's' : ''} ago`}
+                  </span>
+                  <span className="flex-1 min-w-0 text-sm text-text truncate">{s.artist}</span>
+                  <span className="text-xs text-text-muted truncate hidden sm:block">
+                    {[s.venue, s.city].filter(Boolean).join(' · ')}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Recent show posters */}
       {recentPosters.length > 0 && (

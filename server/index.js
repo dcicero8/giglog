@@ -124,6 +124,56 @@ app.get('/api/stats', async (req, res) => {
   });
 });
 
+// Insights — trends + on-this-day. Festival children count as shows; parent containers don't.
+app.get('/api/insights', async (req, res) => {
+  const uid = req.userId;
+  const rows = await db.queryRows(`
+    SELECT id, artist, venue, city, date FROM concerts
+      WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+      AND ${US(1)}
+  `, [uid]);
+
+  const byYear = {}, byMonth = {}, artistCount = {}, venueCount = {};
+  const cities = new Set(), states = new Set(), countries = new Set();
+  for (const r of rows) {
+    if (r.date) {
+      byYear[r.date.slice(0, 4)] = (byYear[r.date.slice(0, 4)] || 0) + 1;
+      const m = parseInt(r.date.slice(5, 7), 10);
+      if (m >= 1 && m <= 12) byMonth[m] = (byMonth[m] || 0) + 1;
+    }
+    if (r.artist) artistCount[r.artist] = (artistCount[r.artist] || 0) + 1;
+    if (r.venue) venueCount[r.venue] = (venueCount[r.venue] || 0) + 1;
+    if (r.city) {
+      cities.add(r.city);
+      const parts = r.city.split(',').map(s => s.trim()).filter(Boolean);
+      if (parts.length >= 2) states.add(parts[1]);
+      if (parts.length >= 1) countries.add(parts[parts.length - 1]);
+    }
+  }
+
+  const showsByYear = Object.entries(byYear).map(([year, count]) => ({ year, count })).sort((a, b) => a.year.localeCompare(b.year));
+  const showsByMonth = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, count: byMonth[i + 1] || 0 }));
+  const rank = (obj) => Object.entries(obj).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  // On this day — same month/day in earlier years
+  const now = new Date();
+  const md = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const onThisDay = rows
+    .filter(r => r.date && r.date.slice(5, 10) === md)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map(r => ({ id: r.id, artist: r.artist, venue: r.venue, city: r.city, date: r.date }));
+
+  res.json({
+    totalShows: rows.length,
+    showsByYear,
+    showsByMonth,
+    topArtists: rank(artistCount).slice(0, 12),
+    topVenues: rank(venueCount).slice(0, 12),
+    locations: { cities: cities.size, states: states.size, countries: countries.size },
+    onThisDay,
+  });
+});
+
 // Artists aggregate endpoint
 app.get('/api/artists', async (req, res) => {
   const uid = req.userId;

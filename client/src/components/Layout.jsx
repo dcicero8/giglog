@@ -11,6 +11,7 @@ const navItems = [
   { to: '/map', label: 'Map', icon: '◎' },
   { to: '/artists', label: 'Artists', icon: '♪' },
   { to: '/venues', label: 'Venues', icon: '🏛' },
+  { to: '/stats', label: 'Stats', icon: '📈' },
   { to: '/songs', label: 'Songs', icon: '🎵' },
   { to: '/collection', label: 'Collection', icon: '🎫' },
   { to: '/buddies', label: 'Buddies', icon: '👥' },
