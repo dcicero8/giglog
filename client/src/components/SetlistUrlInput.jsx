@@ -217,7 +217,7 @@ export default function SetlistUrlInput({ url, onUrlChange, altUrl, onAltUrlChan
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder={isFestival ? 'Paste any artist URL from the festival...' : 'https://www.setlist.fm/setlist/...'}
+              placeholder={isFestival ? 'Paste a festival page URL, or any one artist URL from it...' : 'https://www.setlist.fm/setlist/...'}
               value={url}
               onChange={e => { onUrlChange(e.target.value); onClearError?.() }}
               onKeyDown={e => e.key === 'Enter' && url && !showAlt && (isFestival ? onFestivalImport?.() : onImport())}

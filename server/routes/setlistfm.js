@@ -311,6 +311,81 @@ router.get('/festival/:id', async (req, res) => {
   }
 });
 
+function titleCaseSlug(slug) {
+  return slug.split('-').map(w => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+}
+
+// Festival page import — scrape a setlist.fm /festival/ page for all artists across all days.
+// setlist.fm's API has no festival endpoint, so we read the festival HTML to get each act's
+// setlist id, then fetch those via the API and group them by day.
+router.get('/festival-page', async (req, res) => {
+  const url = (req.query.url || '').toString();
+  const m = url.match(/setlist\.fm\/festival\/\d+\/(.+?)-([0-9a-f]+)\.html/i);
+  if (!m) return res.status(400).json({ error: 'Not a setlist.fm festival page URL' });
+  const slug = m[1];
+  const festId = m[2];
+
+  try {
+    const cacheKey = `festival-page:${festId}`;
+    const cached = await getCached(cacheKey);
+    if (cached) return res.json({ ...cached, cached: true });
+
+    const daily = await rateLimiter.checkDailyLimit();
+    if (!daily.allowed) return await handleRateLimitError(res, { rateLimitInfo: daily });
+
+    const pageRes = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'Accept': 'text/html' },
+    });
+    if (!pageRes.ok) return res.status(502).json({ error: `Could not load festival page (HTTP ${pageRes.status})` });
+    const html = await pageRes.text();
+
+    // Every act on a festival page links to its setlist: /setlist/.../...-<id>.html
+    const ids = [...new Set([...html.matchAll(/\/setlist\/[^"']*?-([0-9a-f]+)\.html/gi)].map(x => x[1]))];
+    if (!ids.length) return res.status(404).json({ error: 'No setlists found on that festival page' });
+
+    const byDate = new Map();
+    let venue = '', city = '', partial = false;
+
+    for (const id of ids) {
+      let setlist = await getCached(`setlist:${id}`);
+      if (!setlist) {
+        try {
+          setlist = await fetchSetlistFm(`/setlist/${id}`);
+          await setCache(`setlist:${id}`, setlist, 24 * 30);
+        } catch (err) {
+          if (err.message === 'RATE_LIMITED') { partial = true; break; }
+          continue; // skip a single bad setlist, keep going
+        }
+      }
+      const ed = setlist.eventDate; // dd-MM-yyyy
+      if (!ed) continue;
+      const [d, mo, y] = ed.split('-');
+      const iso = `${y}-${mo}-${d}`;
+      if (!venue) venue = setlist.venue?.name || '';
+      if (!city) city = [setlist.venue?.city?.name, setlist.venue?.city?.stateCode || setlist.venue?.city?.state, setlist.venue?.city?.country?.code].filter(Boolean).join(', ');
+      if (!byDate.has(iso)) byDate.set(iso, []);
+      byDate.get(iso).push({
+        artist: setlist.artist?.name || '',
+        setlist_fm_id: id,
+        setlist_fm_url: setlist.url || `https://www.setlist.fm/setlist/${id}.html`,
+        hasSongs: setlist.sets?.set?.some(s => s.song?.length > 0) || false,
+        tour: setlist.tour?.name || '',
+      });
+    }
+
+    const days = [...byDate.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, artists]) => ({ date, artists: artists.sort((x, y) => x.artist.localeCompare(y.artist)) }));
+
+    const result = { name: titleCaseSlug(slug), venue, city, days, partial };
+    if (!partial && days.length) await setCache(cacheKey, result, 24 * 30);
+    res.json({ ...result, cached: false });
+  } catch (err) {
+    if (err.message === 'RATE_LIMITED') return await handleRateLimitError(res, err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // API usage stats
 router.get('/usage', async (req, res) => {
   const today = new Date().toISOString().split('T')[0];

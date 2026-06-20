@@ -6,6 +6,10 @@ export function parseSetlistUrl(url) {
   return match ? match[1] : null
 }
 
+export function isFestivalPageUrl(url) {
+  return /setlist\.fm\/festival\/\d+\/.*-[0-9a-f]+\.html/i.test(url || '')
+}
+
 export function useSetlistImport() {
   const [setlistUrl, setSetlistUrl] = useState('')
   const [altSetlistUrl, setAltSetlistUrl] = useState('')
@@ -110,9 +114,26 @@ export function useSetlistImport() {
   }
 
   const importFestival = async () => {
+    // A full festival page URL → scrape every act across all days
+    if (isFestivalPageUrl(setlistUrl)) {
+      setLoading(true)
+      setError(null)
+      try {
+        const data = await api.get(`/setlistfm/festival-page?url=${encodeURIComponent(setlistUrl.trim())}`)
+        setSetlistUrl('')
+        return data
+      } catch (err) {
+        setError(err.message)
+        return null
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    // Otherwise treat it as one artist's setlist and find everyone at that venue+date
     const id = parseSetlistUrl(setlistUrl)
     if (!id) {
-      setError('Could not parse setlist ID from that URL.')
+      setError('Paste an artist setlist URL or a festival page URL from setlist.fm.')
       return null
     }
 

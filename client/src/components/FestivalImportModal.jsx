@@ -1,13 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Modal from './Modal'
 import { api } from '../lib/api'
 
 export default function FestivalImportModal({ data, onClose, onComplete, existingFestivalId }) {
-  const [festivalName, setFestivalName] = useState(data?.tour || 'Festival')
-  const [selected, setSelected] = useState(() =>
-    new Set(data?.artists?.map((_, i) => i) || [])
-  )
+  // Normalize to a days[] shape: festival-page imports provide data.days (multi-day);
+  // the single venue+date import provides a flat data.artists / data.date.
+  const days = data?.days || (data ? [{ date: data.date, artists: data.artists || [] }] : [])
+  const [festivalName, setFestivalName] = useState(data?.name || data?.tour || 'Festival')
+  const [dayIdx, setDayIdx] = useState(0)
+  const currentDay = days[dayIdx] || { date: '', artists: [] }
+  const [selected, setSelected] = useState(() => new Set(currentDay.artists.map((_, i) => i)))
   const [importing, setImporting] = useState(false)
+
+  // Default to all of a day's artists whenever the chosen day changes
+  useEffect(() => {
+    setSelected(new Set((days[dayIdx]?.artists || []).map((_, i) => i)))
+  }, [dayIdx]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAddDay = !!existingFestivalId
 
@@ -23,17 +31,17 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
   }
 
   const toggleAll = () => {
-    if (selected.size === data.artists.length) {
+    if (selected.size === currentDay.artists.length) {
       setSelected(new Set())
     } else {
-      setSelected(new Set(data.artists.map((_, i) => i)))
+      setSelected(new Set(currentDay.artists.map((_, i) => i)))
     }
   }
 
   const handleImport = async () => {
     setImporting(true)
     try {
-      const toImport = data.artists.filter((_, i) => selected.has(i))
+      const toImport = currentDay.artists.filter((_, i) => selected.has(i))
       let parentId = existingFestivalId
 
       if (!isAddDay) {
@@ -42,7 +50,7 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
           artist: festivalName,
           venue: data.venue,
           city: data.city,
-          date: data.date,
+          date: currentDay.date,
           price: null,
           rating: 0,
           notes: '',
@@ -53,10 +61,10 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
         // Update the existing festival's end_date if this day is later
         try {
           const existing = await api.get(`/concerts/${existingFestivalId}`)
-          if (existing && data.date) {
+          if (existing && currentDay.date) {
             const existingStart = existing.date
             const existingEnd = existing.end_date
-            const newDate = data.date
+            const newDate = currentDay.date
             // Expand date range if needed
             if (newDate > (existingEnd || existingStart)) {
               await api.put(`/concerts/${existingFestivalId}`, { end_date: newDate })
@@ -83,7 +91,7 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
           artist: artist.artist,
           venue: data.venue,
           city: data.city,
-          date: data.date,
+          date: currentDay.date,
           price: null,
           rating: 0,
           notes: '',
@@ -105,9 +113,10 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
     }
   }
 
-  const formattedDate = data.date
-    ? new Date(data.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
+  const fmtDay = (d) => d
+    ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
     : ''
+  const formattedDate = fmtDay(currentDay.date)
 
   return (
     <Modal open={true} onClose={onClose} title={isAddDay ? 'Add Festival Day' : 'Festival Import'}>
@@ -133,9 +142,36 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
           </p>
           <p className="text-xs text-text-muted">{formattedDate}</p>
           <p className="text-xs text-text-dim">
-            Found {data.artists.length} artist{data.artists.length !== 1 ? 's' : ''}
+            {currentDay.artists.length} artist{currentDay.artists.length !== 1 ? 's' : ''} on this day
           </p>
         </div>
+
+        {/* Day picker (multi-day festivals) */}
+        {days.length > 1 && (
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-text-dim mb-1.5">Pick a day</label>
+            <div className="flex flex-wrap gap-2">
+              {days.map((d, i) => (
+                <button
+                  key={d.date || i}
+                  onClick={() => setDayIdx(i)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                    i === dayIdx
+                      ? 'bg-warning/20 text-warning border-warning/40'
+                      : 'bg-bg-input text-text-muted border-border hover:text-text'
+                  }`}
+                >
+                  {fmtDay(d.date) || `Day ${i + 1}`}
+                  <span className="ml-1.5 text-text-dim">({d.artists.length})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.partial && (
+          <p className="text-xs text-warning">Some acts may be missing — setlist.fm's rate limit was hit while loading. Try again in a moment to fill in the rest.</p>
+        )}
 
         {/* Select all */}
         <div className="flex items-center justify-between">
@@ -143,7 +179,7 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
             onClick={toggleAll}
             className="text-xs text-secondary hover:text-secondary bg-transparent border-0 cursor-pointer"
           >
-            {selected.size === data.artists.length ? 'Deselect All' : 'Select All'}
+            {selected.size === currentDay.artists.length ? 'Deselect All' : 'Select All'}
           </button>
           <span className="text-xs text-text-dim">
             {selected.size} selected
@@ -152,7 +188,7 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
 
         {/* Artist list */}
         <div className="space-y-1 max-h-[50vh] overflow-y-auto">
-          {data.artists.map((artist, i) => (
+          {currentDay.artists.map((artist, i) => (
             <label
               key={artist.setlist_fm_id}
               className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-bg-card-hover cursor-pointer transition-colors"
