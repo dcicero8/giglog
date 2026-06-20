@@ -32,6 +32,12 @@ export default function Concerts() {
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState(null)
   const scanFileRef = useRef(null)
+  // Combine-into-festival selection
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [combineOpen, setCombineOpen] = useState(false)
+  const [festivalName, setFestivalName] = useState('')
+  const [combining, setCombining] = useState(false)
 
   // Scroll to highlighted concert from carousel click
   useEffect(() => {
@@ -119,6 +125,60 @@ export default function Concerts() {
     fetchConcerts()
   }
 
+  // ── Combine into festival ──
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
+  // Suggest a festival name from what the selected shows have in common
+  const suggestFestivalName = () => {
+    const selected = concerts.filter(c => selectedIds.has(c.id))
+    if (!selected.length) return ''
+    const allSame = (key) => {
+      const vals = selected.map(c => c[key]).filter(Boolean)
+      return vals.length === selected.length && vals.every(v => v === vals[0]) ? vals[0] : null
+    }
+    const firstDate = selected.map(c => c.date).filter(Boolean).sort()[0]
+    const year = firstDate ? new Date(firstDate + 'T00:00:00').getFullYear() : ''
+    const tour = allSame('tour_name')
+    if (tour) return tour
+    const venue = allSame('venue')
+    if (venue) return `${venue}${year ? ' ' + year : ''}`
+    const city = allSame('city')
+    if (city) return `Festival ${year}`.trim() + ` · ${city}`
+    return year ? `Festival ${year}` : ''
+  }
+
+  const openCombine = () => {
+    setFestivalName(suggestFestivalName())
+    setCombineOpen(true)
+  }
+
+  const handleCombine = async (e) => {
+    e.preventDefault()
+    if (selectedIds.size < 2 || !festivalName.trim()) return
+    setCombining(true)
+    try {
+      await api.post('/concerts/combine', { name: festivalName.trim(), ids: [...selectedIds] })
+      setCombineOpen(false)
+      exitSelectMode()
+      fetchConcerts()
+    } catch (err) {
+      alert(err.message || 'Failed to combine shows')
+    } finally {
+      setCombining(false)
+    }
+  }
+
   const importFromSetlistUrl = async () => {
     const result = await importUrl()
     if (result) {
@@ -193,6 +253,13 @@ export default function Concerts() {
             onChange={handleScanTicket}
             className="hidden"
           />
+          <button
+            onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors border-0 cursor-pointer ${selectMode ? 'bg-secondary/20 text-secondary' : 'bg-secondary/10 text-secondary hover:bg-secondary/20'}`}
+            title="Combine separate shows from the same event into one festival"
+          >
+            {selectMode ? '✕ Cancel' : '⛺ Combine'}
+          </button>
           {aiAvailable && (
             <button
               onClick={() => scanFileRef.current?.click()}
@@ -286,6 +353,27 @@ export default function Concerts() {
         </select>
       </div>
 
+      {/* Combine selection bar */}
+      {selectMode && (
+        <div className="sticky top-16 z-30 mb-4 p-3 rounded-lg bg-secondary/10 border border-secondary/30 backdrop-blur-md flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-sm text-text">
+            {selectedIds.size === 0
+              ? 'Tap the shows from the same event, then combine them into one festival'
+              : `${selectedIds.size} show${selectedIds.size !== 1 ? 's' : ''} selected`}
+          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={exitSelectMode} className="px-3 py-1.5 text-xs rounded-lg bg-transparent text-text-muted hover:text-text border-0 cursor-pointer">Cancel</button>
+            <button
+              onClick={openCombine}
+              disabled={selectedIds.size < 2}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Combine into festival
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => (
@@ -306,8 +394,26 @@ export default function Concerts() {
               <div
                 key={concert.id}
                 id={`concert-${concert.id}`}
-                className={`transition-all duration-700 rounded-xl ${isHighlighted ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg scale-[1.02]' : ''}`}
+                className={`relative transition-all duration-700 rounded-xl ${isHighlighted ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg scale-[1.02]' : ''}`}
               >
+                {/* Selection overlay (only for standalone shows — festivals can't be combined) */}
+                {selectMode && !(concert.children?.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => toggleSelect(concert.id)}
+                    aria-pressed={selectedIds.has(concert.id)}
+                    title={selectedIds.has(concert.id) ? 'Deselect' : 'Select'}
+                    className={`absolute inset-0 z-20 rounded-xl border-2 cursor-pointer transition-colors p-0 ${
+                      selectedIds.has(concert.id) ? 'border-accent bg-accent/10' : 'border-transparent hover:bg-secondary/5'
+                    }`}
+                  >
+                    <span className={`absolute top-3 left-3 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                      selectedIds.has(concert.id) ? 'bg-accent border-accent text-white' : 'bg-bg/80 border-border text-transparent'
+                    }`}>
+                      ✓
+                    </span>
+                  </button>
+                )}
                 {concert.children?.length > 0 ? (
                   <FestivalCard
                     concert={concert}
@@ -343,6 +449,43 @@ export default function Concerts() {
           existingFestivalId={addDayFestivalId}
         />
       )}
+
+      {/* Combine into Festival Modal */}
+      <Modal open={combineOpen} onClose={() => setCombineOpen(false)} title="Combine into festival">
+        <form onSubmit={handleCombine} className="space-y-4">
+          <p className="text-sm text-text-muted">
+            {selectedIds.size} shows will be grouped under one festival. Each keeps its own rating, setlist, price, and ticket.
+          </p>
+          <div className="space-y-1">
+            {concerts.filter(c => selectedIds.has(c.id)).map(c => (
+              <div key={c.id} className="text-sm text-text flex items-center gap-2">
+                <span className="text-text-dim">•</span>
+                <span className="font-medium">{c.artist}</span>
+                {c.date && <span className="text-xs text-text-dim">{new Date(c.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+              </div>
+            ))}
+          </div>
+          <div>
+            <label className="block text-sm text-text-muted mb-1">Festival name *</label>
+            <input
+              type="text"
+              required
+              autoFocus
+              value={festivalName}
+              onChange={e => setFestivalName(e.target.value)}
+              placeholder="e.g. Bridge School Benefit 2012"
+              className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={combining || !festivalName.trim() || selectedIds.size < 2}
+            className="w-full px-4 py-2.5 text-sm font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {combining ? 'Combining…' : 'Combine into festival'}
+          </button>
+        </form>
+      </Modal>
 
       {/* Add/Edit Modal */}
       <Modal

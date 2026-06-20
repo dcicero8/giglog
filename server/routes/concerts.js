@@ -106,6 +106,50 @@ router.post('/', async (req, res) => {
   res.status(201).json(concert);
 });
 
+// Combine existing standalone concerts into one festival (parent container + children)
+router.post('/combine', async (req, res) => {
+  const { name, ids } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Festival name is required' });
+  if (!Array.isArray(ids) || ids.length < 2) return res.status(400).json({ error: 'Select at least 2 shows to combine' });
+
+  // Load the selected concerts; each must belong to the user, be standalone, and not already a festival
+  const rows = [];
+  for (const id of ids) {
+    const c = await db.queryRow(`SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`, [id, req.userId]);
+    if (!c) return res.status(404).json({ error: `Concert ${id} not found` });
+    if (c.parent_concert_id) return res.status(400).json({ error: 'One of the selected shows is already part of a festival' });
+    const kids = await db.queryRow('SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id = $1', [c.id]);
+    if (Number(kids.count) > 0) return res.status(400).json({ error: 'One of the selected items is already a festival' });
+    rows.push(c);
+  }
+
+  // Derive shared fields for the parent container (use the value only if all selected shows agree)
+  const shared = (key) => {
+    const vals = rows.map(r => r[key]).filter(Boolean);
+    return vals.length && vals.every(v => v === vals[0]) ? vals[0] : null;
+  };
+  const dates = rows.map(r => r.date).filter(Boolean).sort();
+  const venue = shared('venue');
+  const city = shared('city');
+  const date = shared('date') || dates[0] || null;
+
+  // Create the festival parent (its `artist` field is the festival name; it is not counted as a show)
+  const parent = await db.queryRow(
+    `INSERT INTO concerts (user_id, artist, venue, city, date, parent_concert_id, display_order)
+     VALUES ($1, $2, $3, $4, $5, NULL, 0) RETURNING *`,
+    [req.userId, name.trim(), venue, city, date]
+  );
+
+  // Reparent the selected concerts as children, preserving all their data
+  let order = 0;
+  for (const c of rows) {
+    await db.query('UPDATE concerts SET parent_concert_id = $1, display_order = $2 WHERE id = $3', [parent.id, order++, c.id]);
+  }
+
+  const children = await db.queryRows('SELECT * FROM concerts WHERE parent_concert_id = $1 ORDER BY display_order ASC', [parent.id]);
+  res.status(201).json({ ...parent, children });
+});
+
 // Update concert
 router.put('/:id', async (req, res) => {
   const existing = await db.queryRow(
