@@ -4,9 +4,9 @@ const STORAGE_KEY = 'giglog-theme'
 
 export function getStoredTheme() {
   try {
-    return localStorage.getItem(STORAGE_KEY) || 'dark'
+    return localStorage.getItem(STORAGE_KEY) || 'light'
   } catch {
-    return 'dark'
+    return 'light'
   }
 }
 

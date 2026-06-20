@@ -23,6 +23,18 @@ export default function Venues() {
     }
   }
 
+  // Top 10 venues by rating (tiebreak by show count, then name). Only rated venues qualify,
+  // and only badge when there are enough venues for a "top 10" to be meaningful.
+  const topTen = new Set(
+    venues.length > 10
+      ? [...venues]
+          .filter(v => v.rating)
+          .sort((a, b) => (b.rating - a.rating) || (b.showCount - a.showCount) || a.venue.localeCompare(b.venue))
+          .slice(0, 10)
+          .map(v => v.venue)
+      : []
+  )
+
   const filtered = venues
     .filter(v => !search || v.venue.toLowerCase().includes(search.toLowerCase()) || (v.city || '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
@@ -87,7 +99,14 @@ export default function Venues() {
           {filtered.map(v => (
             <div key={v.venue} className="bg-bg-card border border-border rounded-lg p-4 hover:bg-bg-card-hover transition-colors flex items-center gap-4 flex-wrap">
               <div className="flex-1 min-w-[200px]">
-                <h3 className="font-heading font-bold text-sm text-text">{v.venue}</h3>
+                <h3 className="font-heading font-bold text-sm text-text flex items-center gap-2">
+                  {v.venue}
+                  {topTen.has(v.venue) && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/15 text-accent whitespace-nowrap" title="One of your top 10 rated venues">
+                      🏆 Top 10
+                    </span>
+                  )}
+                </h3>
                 <div className="flex items-center gap-3 mt-1 text-xs text-text-muted">
                   {v.city && <span>{v.city}</span>}
                   <span>{v.showCount} show{v.showCount !== 1 ? 's' : ''}</span>

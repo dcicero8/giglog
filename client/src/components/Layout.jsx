@@ -50,21 +50,21 @@ export default function Layout() {
             </NavLink>
 
             {/* Desktop nav */}
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden lg:flex items-center gap-0.5">
               {navItems.map(item => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   end={item.to === '/'}
                   className={({ isActive }) =>
-                    `px-3 py-2 rounded-lg text-sm font-medium transition-colors no-underline ${
+                    `px-2.5 py-2 rounded-lg text-sm font-medium transition-colors no-underline whitespace-nowrap ${
                       isActive
                         ? 'text-accent bg-accent/10'
                         : 'text-text-muted hover:text-text hover:bg-white/5'
                     }`
                   }
                 >
-                  <span className="mr-1.5">{item.icon}</span>
+                  <span className="mr-1.5 inline-block">{item.icon}</span>
                   {item.label}
                 </NavLink>
               ))}
@@ -100,7 +100,7 @@ export default function Layout() {
               {/* Mobile menu button */}
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="md:hidden p-2 text-text-muted hover:text-text rounded-lg hover:bg-white/5 border-0 bg-transparent cursor-pointer"
+                className="lg:hidden p-2 text-text-muted hover:text-text rounded-lg hover:bg-white/5 border-0 bg-transparent cursor-pointer"
               >
                 <span className="text-xl">{menuOpen ? '✕' : '☰'}</span>
               </button>
@@ -110,7 +110,7 @@ export default function Layout() {
 
         {/* Mobile nav */}
         {menuOpen && (
-          <nav className="md:hidden border-t border-border bg-bg/95 backdrop-blur-xl">
+          <nav className="lg:hidden border-t border-border bg-bg/95 backdrop-blur-xl">
             <div className="px-4 py-2 space-y-1">
               {navItems.map(item => (
                 <NavLink

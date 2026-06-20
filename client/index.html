@@ -9,10 +9,10 @@
       // Apply saved theme before paint to avoid a flash of the wrong theme
       (function () {
         try {
-          var t = localStorage.getItem('giglog-theme') || 'dark';
+          var t = localStorage.getItem('giglog-theme') || 'light';
           document.documentElement.setAttribute('data-theme', t);
         } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-theme', 'light');
         }
       })();
     </script>
