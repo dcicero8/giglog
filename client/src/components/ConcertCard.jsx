@@ -194,8 +194,19 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
 
   const matchInfo = concert.youtube_match ? YT_MATCH_ICONS[concert.youtube_match] : null
 
+  // Clicking anywhere in the card toggles the setlist, except on interactive
+  // controls (buttons/links/inputs/star rating) or inside the setlist/ticket regions.
+  const handleCardClick = (e) => {
+    if (!concert.setlist_fm_id) return
+    if (e.target.closest('button, a, input, textarea, select, [data-stop-card]')) return
+    onViewSetlist(concert)
+  }
+
   return (
-    <div className="bg-bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:bg-bg-card-hover hover:border-border-hover hover:shadow-[0_0_25px_rgba(255,60,100,0.08)]">
+    <div
+      onClick={handleCardClick}
+      className={`bg-bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:bg-bg-card-hover hover:border-border-hover hover:shadow-[0_0_25px_rgba(255,60,100,0.08)] ${concert.setlist_fm_id ? 'cursor-pointer' : ''}`}
+    >
       {/* Poster Image — zoomed out with black sides */}
       {concert.poster_image && (
         <div className="relative group bg-black flex items-center justify-center" style={{ maxHeight: '320px' }}>
@@ -216,7 +227,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
       <div className="p-5">
       {/* Ticket Art / Uploaded Image — with flip for setlist */}
       {(concert.ticket_image || concert.ticket_art_svg) && (
-        <div className="mb-4">
+        <div className="mb-4" data-stop-card>
           <button
             onClick={() => setShowArt(!showArt)}
             className="text-xs text-accent hover:text-accent-hover bg-transparent border-0 cursor-pointer mb-2"
@@ -314,7 +325,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
         )}
       </div>
 
-      <div className="mb-3">
+      <div className="mb-3 w-fit" data-stop-card>
         <StarRating rating={concert.rating || 0} onChange={handleRating} size="sm" />
       </div>
 
@@ -325,6 +336,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
       {/* Inline setlist for cards without ticket art (no flip available) */}
       {!(concert.ticket_image || concert.ticket_art_svg) && (
         <div
+          data-stop-card
           className="mb-3 rounded-lg bg-[#f5f0e6] border border-[#d4c9a8] overflow-hidden transition-all duration-500 ease-in-out"
           style={{ maxHeight: setlistOpen ? '400px' : '0px', opacity: setlistOpen ? 1 : 0, borderWidth: setlistOpen ? '1px' : '0px' }}
         >
