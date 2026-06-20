@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import Modal from './Modal'
 import { api } from '../lib/api'
 
@@ -6,51 +6,60 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
   // Normalize to a days[] shape: festival-page imports provide data.days (multi-day);
   // the single venue+date import provides a flat data.artists / data.date.
   const days = data?.days || (data ? [{ date: data.date, artists: data.artists || [] }] : [])
+  const multiDay = days.length > 1
+  const isAddDay = !!existingFestivalId
+
   const [festivalName, setFestivalName] = useState(data?.name || data?.tour || 'Festival')
-  const [dayIdx, setDayIdx] = useState(0)
-  const currentDay = days[dayIdx] || { date: '', artists: [] }
-  const [selected, setSelected] = useState(() => new Set(currentDay.artists.map((_, i) => i)))
+  // 'all' = every day at once; otherwise an index into days[]. Default to all days when multi-day.
+  const [dayIdx, setDayIdx] = useState(multiDay ? 'all' : 0)
+
+  // Flat list of the artists currently in view, each tagged with its own date
+  const isAll = dayIdx === 'all'
+  const viewArtists = isAll
+    ? days.flatMap(d => d.artists.map(a => ({ ...a, _date: d.date })))
+    : (days[dayIdx]?.artists || []).map(a => ({ ...a, _date: days[dayIdx].date }))
+
+  const [selected, setSelected] = useState(() => new Set(viewArtists.map((_, i) => i)))
   const [importing, setImporting] = useState(false)
 
-  // Default to all of a day's artists whenever the chosen day changes
+  // Reset selection to "all of the current view" whenever the chosen day changes
   useEffect(() => {
-    setSelected(new Set((days[dayIdx]?.artists || []).map((_, i) => i)))
+    const count = (dayIdx === 'all' ? days.flatMap(d => d.artists).length : (days[dayIdx]?.artists.length || 0))
+    setSelected(new Set(Array.from({ length: count }, (_, i) => i)))
   }, [dayIdx]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isAddDay = !!existingFestivalId
 
   if (!data) return null
 
   const toggle = (idx) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(idx)) next.delete(idx)
-      else next.add(idx)
+      next.has(idx) ? next.delete(idx) : next.add(idx)
       return next
     })
   }
 
   const toggleAll = () => {
-    if (selected.size === currentDay.artists.length) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(currentDay.artists.map((_, i) => i)))
-    }
+    setSelected(selected.size === viewArtists.length ? new Set() : new Set(viewArtists.map((_, i) => i)))
   }
 
   const handleImport = async () => {
     setImporting(true)
     try {
-      const toImport = currentDay.artists.filter((_, i) => selected.has(i))
+      const toImport = viewArtists.filter((_, i) => selected.has(i))
+      if (!toImport.length) return
+      const dates = toImport.map(a => a._date).filter(Boolean).sort()
+      const minDate = dates[0] || null
+      const maxDate = dates[dates.length - 1] || minDate
+
       let parentId = existingFestivalId
 
       if (!isAddDay) {
-        // Create festival parent entry
         const parent = await api.post('/concerts', {
           artist: festivalName,
           venue: data.venue,
           city: data.city,
-          date: currentDay.date,
+          date: minDate,
+          end_date: maxDate && maxDate !== minDate ? maxDate : null,
           price: null,
           rating: 0,
           notes: '',
@@ -58,24 +67,22 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
         })
         parentId = parent.id
       } else {
-        // Update the existing festival's end_date if this day is later
+        // Expand the existing festival's date range to cover whatever we're adding
         try {
           const existing = await api.get(`/concerts/${existingFestivalId}`)
-          if (existing && currentDay.date) {
-            const existingStart = existing.date
-            const existingEnd = existing.end_date
-            const newDate = currentDay.date
-            // Expand date range if needed
-            if (newDate > (existingEnd || existingStart)) {
-              await api.put(`/concerts/${existingFestivalId}`, { end_date: newDate })
-            } else if (newDate < existingStart) {
-              await api.put(`/concerts/${existingFestivalId}`, { date: newDate, end_date: existingEnd || existingStart })
-            }
+          if (existing && minDate) {
+            const start = existing.date
+            const end = existing.end_date || existing.date
+            const newStart = minDate < start ? minDate : start
+            const newEnd = maxDate > end ? maxDate : end
+            const patch = {}
+            if (newStart !== start) patch.date = newStart
+            if (newEnd !== end) patch.end_date = newEnd
+            if (Object.keys(patch).length) await api.put(`/concerts/${existingFestivalId}`, patch)
           }
-        } catch { /* ignore - non-critical */ }
+        } catch { /* non-critical */ }
       }
 
-      // Get existing children count for display_order offset
       let orderOffset = 0
       if (isAddDay) {
         try {
@@ -84,14 +91,14 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
         } catch { /* start from 0 */ }
       }
 
-      // Create child entries for each selected band
+      // Each child carries its own day's date, so multi-day festivals render grouped by day
       for (let i = 0; i < toImport.length; i++) {
         const artist = toImport[i]
         await api.post('/concerts', {
           artist: artist.artist,
           venue: data.venue,
           city: data.city,
-          date: currentDay.date,
+          date: artist._date,
           price: null,
           rating: 0,
           notes: '',
@@ -116,7 +123,13 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
   const fmtDay = (d) => d
     ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
     : ''
-  const formattedDate = fmtDay(currentDay.date)
+  const fmtShort = (d) => d
+    ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : ''
+
+  const headerDate = isAll
+    ? `${fmtShort(days[0]?.date)} – ${fmtShort(days[days.length - 1]?.date)}`
+    : fmtDay(days[dayIdx]?.date)
 
   return (
     <Modal open={true} onClose={onClose} title={isAddDay ? 'Add Festival Day' : 'Festival Import'}>
@@ -135,30 +148,35 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
             </>
           )}
           {isAddDay && (
-            <p className="text-sm font-medium text-warning">Adding a new day to this festival</p>
+            <p className="text-sm font-medium text-warning">Adding to this festival</p>
           )}
-          <p className="text-xs text-text-muted">
-            {data.venue} · {data.city}
-          </p>
-          <p className="text-xs text-text-muted">{formattedDate}</p>
+          <p className="text-xs text-text-muted">{data.venue} · {data.city}</p>
+          <p className="text-xs text-text-muted">{headerDate}</p>
           <p className="text-xs text-text-dim">
-            {currentDay.artists.length} artist{currentDay.artists.length !== 1 ? 's' : ''} on this day
+            {viewArtists.length} artist{viewArtists.length !== 1 ? 's' : ''}{isAll && multiDay ? ` across ${days.length} days` : ''}
           </p>
         </div>
 
         {/* Day picker (multi-day festivals) */}
-        {days.length > 1 && (
+        {multiDay && (
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-text-dim mb-1.5">Pick a day</label>
+            <label className="block text-[10px] uppercase tracking-wider text-text-dim mb-1.5">Which day(s)?</label>
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setDayIdx('all')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                  isAll ? 'bg-warning/20 text-warning border-warning/40' : 'bg-bg-input text-text-muted border-border hover:text-text'
+                }`}
+              >
+                All days
+                <span className="ml-1.5 text-text-dim">({days.flatMap(d => d.artists).length})</span>
+              </button>
               {days.map((d, i) => (
                 <button
                   key={d.date || i}
                   onClick={() => setDayIdx(i)}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
-                    i === dayIdx
-                      ? 'bg-warning/20 text-warning border-warning/40'
-                      : 'bg-bg-input text-text-muted border-border hover:text-text'
+                    i === dayIdx ? 'bg-warning/20 text-warning border-warning/40' : 'bg-bg-input text-text-muted border-border hover:text-text'
                   }`}
                 >
                   {fmtDay(d.date) || `Day ${i + 1}`}
@@ -179,39 +197,43 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
             onClick={toggleAll}
             className="text-xs text-secondary hover:text-secondary bg-transparent border-0 cursor-pointer"
           >
-            {selected.size === currentDay.artists.length ? 'Deselect All' : 'Select All'}
+            {selected.size === viewArtists.length ? 'Deselect All' : 'Select All'}
           </button>
-          <span className="text-xs text-text-dim">
-            {selected.size} selected
-          </span>
+          <span className="text-xs text-text-dim">{selected.size} selected</span>
         </div>
 
-        {/* Artist list */}
+        {/* Artist list (grouped by day when importing all days) */}
         <div className="space-y-1 max-h-[50vh] overflow-y-auto">
-          {currentDay.artists.map((artist, i) => (
-            <label
-              key={artist.setlist_fm_id}
-              className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-bg-card-hover cursor-pointer transition-colors"
-            >
-              <input
-                type="checkbox"
-                checked={selected.has(i)}
-                onChange={() => toggle(i)}
-                className="accent-secondary shrink-0"
-              />
-              <span className="flex-1 text-sm text-text truncate">
-                {artist.artist}
-                {artist.tour && (
-                  <span className="text-text-dim text-xs ml-1.5">{artist.tour}</span>
+          {viewArtists.map((artist, i) => {
+            const showHeader = isAll && multiDay && (i === 0 || viewArtists[i - 1]._date !== artist._date)
+            return (
+              <Fragment key={`${artist.setlist_fm_id}-${i}`}>
+                {showHeader && (
+                  <div className="flex items-center gap-2 mt-2 mb-1 px-1">
+                    <span className="text-[10px] font-semibold text-warning uppercase tracking-wider">{fmtDay(artist._date)}</span>
+                    <div className="flex-1 border-t border-border/40" />
+                  </div>
                 )}
-              </span>
-              {artist.hasSongs ? (
-                <span className="text-[10px] text-success px-1.5 py-0.5 rounded-full bg-success/10 shrink-0">setlist</span>
-              ) : (
-                <span className="text-[10px] text-text-dim px-1.5 py-0.5 rounded-full bg-white/5 shrink-0">no setlist</span>
-              )}
-            </label>
-          ))}
+                <label className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-bg-card-hover cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(i)}
+                    onChange={() => toggle(i)}
+                    className="accent-secondary shrink-0"
+                  />
+                  <span className="flex-1 text-sm text-text truncate">
+                    {artist.artist}
+                    {artist.tour && <span className="text-text-dim text-xs ml-1.5">{artist.tour}</span>}
+                  </span>
+                  {artist.hasSongs ? (
+                    <span className="text-[10px] text-success px-1.5 py-0.5 rounded-full bg-success/10 shrink-0">setlist</span>
+                  ) : (
+                    <span className="text-[10px] text-text-dim px-1.5 py-0.5 rounded-full bg-white/5 shrink-0">no setlist</span>
+                  )}
+                </label>
+              </Fragment>
+            )
+          })}
         </div>
 
         {/* Import button */}
