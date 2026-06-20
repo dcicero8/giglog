@@ -105,6 +105,16 @@ CREATE TABLE IF NOT EXISTS dismissed_artists (
   UNIQUE(artist, user_id)
 );
 
+-- User's personal rating for a venue (independent of per-show ratings)
+CREATE TABLE IF NOT EXISTS venue_ratings (
+  id SERIAL PRIMARY KEY,
+  venue TEXT NOT NULL,
+  rating INTEGER,
+  user_id INTEGER,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(venue, user_id)
+);
+
 -- ══ Auth & Multi-User ══
 
 CREATE TABLE IF NOT EXISTS users (

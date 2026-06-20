@@ -217,6 +217,10 @@ function initSQLite() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, artist TEXT NOT NULL, user_id INTEGER,
       dismissed_at TEXT DEFAULT (datetime('now')), UNIQUE(artist, user_id)
     );
+    CREATE TABLE IF NOT EXISTS venue_ratings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, venue TEXT NOT NULL, rating INTEGER, user_id INTEGER,
+      updated_at TEXT DEFAULT (datetime('now')), UNIQUE(venue, user_id)
+    );
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT, google_id TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL, name TEXT NOT NULL, avatar_url TEXT,

@@ -10,6 +10,7 @@ import Upcoming from './pages/Upcoming'
 import Wishlist from './pages/Wishlist'
 import ConcertMap from './pages/ConcertMap'
 import Artists from './pages/Artists'
+import Venues from './pages/Venues'
 import Settings from './pages/Settings'
 import Collection from './pages/Collection'
 import Songs from './pages/Songs'
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
       { path: 'wishlist', element: <Wishlist /> },
       { path: 'map', element: <ConcertMap /> },
       { path: 'artists', element: <Artists /> },
+      { path: 'venues', element: <Venues /> },
       { path: 'songs', element: <Songs /> },
       { path: 'collection', element: <Collection /> },
       { path: 'buddies', element: <Buddies /> },

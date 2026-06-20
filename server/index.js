@@ -172,6 +172,63 @@ app.get('/api/artists', async (req, res) => {
   res.json(result);
 });
 
+// Venues — derived from concert history, with the user's personal venue rating
+app.get('/api/venues', async (req, res) => {
+  const uid = req.userId;
+  // Real concerts only (exclude festival parent containers) that have a venue
+  const rows = await db.queryRows(`
+    SELECT venue, city, date, price, rating, artist FROM concerts
+      WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+      AND venue IS NOT NULL AND venue <> ''
+      AND ${US(1)}
+  `, [uid]);
+
+  const ratingRows = await db.queryRows(`SELECT venue, rating FROM venue_ratings WHERE ${US(1)}`, [uid]);
+  const venueRating = {};
+  for (const r of ratingRows) venueRating[r.venue] = r.rating;
+
+  const map = {};
+  for (const row of rows) {
+    if (!map[row.venue]) {
+      map[row.venue] = { venue: row.venue, city: row.city || null, showCount: 0, totalSpent: 0, showRatings: [], dates: [], artists: new Set() };
+    }
+    const entry = map[row.venue];
+    entry.showCount++;
+    if (row.price) entry.totalSpent += parseFloat(row.price);
+    if (row.rating) entry.showRatings.push(row.rating);
+    if (row.date) entry.dates.push(row.date);
+    if (row.artist) entry.artists.add(row.artist);
+    if (!entry.city && row.city) entry.city = row.city;
+  }
+
+  const result = Object.values(map).map(v => ({
+    venue: v.venue,
+    city: v.city,
+    showCount: v.showCount,
+    artistCount: v.artists.size,
+    totalSpent: Math.round(v.totalSpent * 100) / 100,
+    avgShowRating: v.showRatings.length ? Math.round((v.showRatings.reduce((s, r) => s + r, 0) / v.showRatings.length) * 10) / 10 : null,
+    firstSeen: v.dates.length ? v.dates.sort()[0] : null,
+    lastSeen: v.dates.length ? v.dates.sort().pop() : null,
+    rating: venueRating[v.venue] || null,
+  })).sort((a, b) => a.venue.localeCompare(b.venue));
+
+  res.json(result);
+});
+
+// Set (or clear, with rating=0) the user's personal rating for a venue
+app.put('/api/venues/rating', async (req, res) => {
+  const { venue, rating } = req.body;
+  if (!venue) return res.status(400).json({ error: 'venue is required' });
+  await db.query(
+    `INSERT INTO venue_ratings (user_id, venue, rating, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (venue, user_id) DO UPDATE SET rating = EXCLUDED.rating, updated_at = NOW()`,
+    [req.userId, venue, rating || null]
+  );
+  res.json({ ok: true });
+});
+
 // Geocode endpoint
 app.get('/api/geocode', async (req, res) => {
   const { city } = req.query;

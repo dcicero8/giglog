@@ -9,6 +9,7 @@ const navItems = [
   { to: '/wishlist', label: 'Wishlist', icon: '★' },
   { to: '/map', label: 'Map', icon: '◎' },
   { to: '/artists', label: 'Artists', icon: '♪' },
+  { to: '/venues', label: 'Venues', icon: '🏛' },
   { to: '/songs', label: 'Songs', icon: '🎵' },
   { to: '/collection', label: 'Collection', icon: '🎫' },
   { to: '/buddies', label: 'Buddies', icon: '👥' },
