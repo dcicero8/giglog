@@ -98,7 +98,12 @@ const sqliteAdapter = {
         }
         return null;
       }
-      return sqliteDb.prepare(q).get(...p) || null;
+      // Use .get() only for statements that return rows (SELECT, or UPDATE/DELETE…RETURNING).
+      // A plain UPDATE/DELETE is not a reader — .get() would throw, so run it instead.
+      const stmt = sqliteDb.prepare(q);
+      if (stmt.reader) return stmt.get(...p) || null;
+      stmt.run(...p);
+      return null;
     } catch (err) {
       throw err;
     }
