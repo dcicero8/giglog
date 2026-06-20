@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, NavLink, Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
+import { useTheme } from '../lib/theme'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '◆' },
@@ -19,6 +20,7 @@ const navItems = [
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { user, loading, authRequired, logout } = useAuth()
+  const { theme, toggle } = useTheme()
 
   if (loading) {
     return (
@@ -69,6 +71,16 @@ export default function Layout() {
             </nav>
 
             <div className="flex items-center gap-2">
+              {/* Theme toggle */}
+              <button
+                onClick={toggle}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                className="p-2 text-text-muted hover:text-text rounded-lg hover:bg-white/5 border-0 bg-transparent cursor-pointer text-lg leading-none"
+              >
+                {theme === 'dark' ? '☀' : '☾'}
+              </button>
+
               {/* User avatar + logout (when auth is active) */}
               {user && (
                 <div className="flex items-center gap-2">

@@ -24,6 +24,40 @@
   --font-body: 'Inter', system-ui, sans-serif;
 }
 
+/* ── Light theme: override the design tokens; Tailwind utilities read these vars ── */
+[data-theme="light"] {
+  --color-bg: #f6f7f9;
+  --color-bg-card: rgba(0, 0, 0, 0.035);
+  --color-bg-card-hover: rgba(0, 0, 0, 0.06);
+  --color-bg-input: rgba(0, 0, 0, 0.05);
+  --color-accent: #e11d48;
+  --color-accent-hover: #be123c;
+  --color-secondary: #7c3aed;
+  --color-secondary-hover: #6d28d9;
+  --color-success: #16a34a;
+  --color-success-dim: rgba(22, 163, 74, 0.14);
+  --color-warning: #d97706;
+  --color-text: #1e293b;
+  --color-text-muted: #64748b;
+  --color-text-dim: #94a3b8;
+  --color-border: rgba(0, 0, 0, 0.1);
+  --color-border-hover: rgba(0, 0, 0, 0.2);
+  --color-overlay: rgba(15, 23, 42, 0.4);
+}
+
+/* Remap translucent-white surfaces/hovers (invisible on light) without touching every call site.
+   The attribute + class selector outranks the plain utility, so no !important needed. */
+[data-theme="light"] .bg-white\/5 { background-color: rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .bg-white\/10 { background-color: rgba(0, 0, 0, 0.07); }
+[data-theme="light"] .hover\:bg-white\/5:hover { background-color: rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(0, 0, 0, 0.07); }
+
+/* Lighten the noise texture and map background in light mode */
+[data-theme="light"] body::after { opacity: 0.02; }
+[data-theme="light"] .leaflet-container { background: #e8eaed !important; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
+
 * {
   box-sizing: border-box;
 }
