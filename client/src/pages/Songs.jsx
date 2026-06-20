@@ -4,7 +4,7 @@ import { useApi } from '../hooks/useApi'
 export default function Songs() {
   const { data, loading } = useApi('/songs')
   const [search, setSearch] = useState('')
-  const [view, setView] = useState('all') // 'all' | 'frequency'
+  const [view, setView] = useState('frequency') // 'frequency' (most heard) | 'all'
   const [sort, setSort] = useState('date_desc')
 
   const stats = data?.stats || {}
@@ -100,6 +100,16 @@ export default function Songs() {
         />
         <div className="flex rounded-lg overflow-hidden border border-border">
           <button
+            onClick={() => setView('frequency')}
+            className={`px-3 py-2 text-xs font-medium border-0 cursor-pointer transition-colors ${
+              view === 'frequency'
+                ? 'bg-accent text-white'
+                : 'bg-bg-input text-text-muted hover:text-text'
+            }`}
+          >
+            Most Heard
+          </button>
+          <button
             onClick={() => setView('all')}
             className={`px-3 py-2 text-xs font-medium border-0 cursor-pointer transition-colors ${
               view === 'all'
@@ -108,16 +118,6 @@ export default function Songs() {
             }`}
           >
             All Songs
-          </button>
-          <button
-            onClick={() => setView('frequency')}
-            className={`px-3 py-2 text-xs font-medium border-0 cursor-pointer transition-colors ${
-              view === 'frequency'
-                ? 'bg-accent text-white'
-                : 'bg-bg-input text-text-muted hover:text-text'
-            }`}
-          >
-            By Song
           </button>
         </div>
         {view === 'all' && (
