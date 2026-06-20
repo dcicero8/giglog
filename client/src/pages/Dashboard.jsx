@@ -107,8 +107,18 @@ export default function Dashboard() {
         </section>
       )}
 
+      {/* Stats Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+        <StatCard label="Shows Attended" value={stats?.concertCount ?? '—'} to="/concerts" />
+        <StatCard label="Artists Seen" value={artistsSeen ?? '—'} color="text-success" to="/artists" />
+        <StatCard label="Venues Attended" value={venuesAttended ?? '—'} to="/venues" />
+        <StatCard label="Songs Heard" value={songsHeard ?? '—'} color="text-warning" to="/songs" />
+        <StatCard label="Upcoming" value={stats?.upcomingCount ?? '—'} color="text-secondary" to="/upcoming" />
+        <StatCard label="Wishlist" value={stats?.wishlistCount ?? '—'} color="text-accent" to="/wishlist" />
+      </div>
+
       {/* Quick Import */}
-      <div className="mb-8">
+      <div className="mb-10">
         <SetlistUrlInput
           url={setlistUrl}
           onUrlChange={setSetlistUrl}
@@ -121,16 +131,6 @@ export default function Dashboard() {
           error={importError}
           onClearError={() => setError(null)}
         />
-      </div>
-
-      {/* Stats Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
-        <StatCard label="Shows Attended" value={stats?.concertCount ?? '—'} />
-        <StatCard label="Artists Seen" value={artistsSeen ?? '—'} color="text-success" />
-        <StatCard label="Venues Attended" value={venuesAttended ?? '—'} />
-        <StatCard label="Songs Heard" value={songsHeard ?? '—'} color="text-warning" />
-        <StatCard label="Upcoming" value={stats?.upcomingCount ?? '—'} color="text-secondary" />
-        <StatCard label="Wishlist" value={stats?.wishlistCount ?? '—'} color="text-accent" />
       </div>
 
       {/* Next Upcoming Shows */}
@@ -272,11 +272,20 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ label, value, color = 'text-text' }) {
-  return (
-    <div className="bg-bg-card border border-border rounded-xl p-4 text-center">
+function StatCard({ label, value, color = 'text-text', to }) {
+  const base = 'bg-bg-card border border-border rounded-xl p-4 text-center block'
+  const inner = (
+    <>
       <p className={`text-2xl font-heading font-bold ${color}`}>{value}</p>
       <p className="text-xs text-text-muted mt-1">{label}</p>
-    </div>
+    </>
   )
+  if (to) {
+    return (
+      <Link to={to} className={`${base} no-underline hover:bg-bg-card-hover hover:border-border-hover transition-colors`}>
+        {inner}
+      </Link>
+    )
+  }
+  return <div className={base}>{inner}</div>
 }
