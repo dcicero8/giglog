@@ -12,7 +12,7 @@ export default function Artists() {
   const { data: artists, loading } = useApi('/artists')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('seen')
-  const [sortBy, setSortBy] = useState('alpha')
+  const [sortBy, setSortBy] = useState('shows')
 
   const filtered = (artists || [])
     .filter(a => {
@@ -25,7 +25,7 @@ export default function Artists() {
     })
     .sort((a, b) => {
       switch (sortBy) {
-        case 'shows': return b.showCount - a.showCount
+        case 'shows': return (b.showCount - a.showCount) || a.artist.localeCompare(b.artist)
         case 'rating': return (b.avgRating || 0) - (a.avgRating || 0)
         case 'spent': return b.totalSpent - a.totalSpent
         case 'recent': return (b.lastSeen || '').localeCompare(a.lastSeen || '')
@@ -70,8 +70,8 @@ export default function Artists() {
           onChange={e => setSortBy(e.target.value)}
           className="px-3 py-1.5 text-xs rounded-lg bg-bg-input border border-border text-text cursor-pointer"
         >
+          <option value="shows">Most Seen</option>
           <option value="alpha">A–Z</option>
-          <option value="shows">Most Shows</option>
           <option value="rating">Top Rated</option>
           <option value="spent">Most Spent</option>
           <option value="recent">Most Recent</option>
