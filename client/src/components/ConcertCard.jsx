@@ -53,7 +53,7 @@ const YT_MATCH_ICONS = {
   tour: { dot: 'bg-[#facc15]', label: 'Same tour' },
 }
 
-export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, aiAvailable, onUpdate, setlistOpen }) {
+export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, aiAvailable, onUpdate, setlistOpen, topVenue }) {
   const [showEbay, setShowEbay] = useState(false)
   const [showYT, setShowYT] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -301,8 +301,13 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
               </button>
             ) : null}
           </div>
-          <p className="text-sm text-text-muted mt-1">
-            {[concert.venue, concert.city].filter(Boolean).join(' · ')}
+          <p className="text-sm text-text-muted mt-1 flex items-center gap-2 flex-wrap">
+            <span>{[concert.venue, concert.city].filter(Boolean).join(' · ')}</span>
+            {topVenue && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/15 text-accent whitespace-nowrap" title="One of your top 10 rated venues">
+                🏆 Top 10
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-1 ml-2 shrink-0">

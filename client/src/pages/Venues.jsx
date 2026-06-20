@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import StarRating from '../components/StarRating'
+import { getTopVenueNames } from '../lib/topVenues'
 
 export default function Venues() {
   const { data, loading } = useApi('/venues')
@@ -23,17 +24,8 @@ export default function Venues() {
     }
   }
 
-  // Top 10 venues by rating (tiebreak by show count, then name). Only rated venues qualify,
-  // and only badge when there are enough venues for a "top 10" to be meaningful.
-  const topTen = new Set(
-    venues.length > 10
-      ? [...venues]
-          .filter(v => v.rating)
-          .sort((a, b) => (b.rating - a.rating) || (b.showCount - a.showCount) || a.venue.localeCompare(b.venue))
-          .slice(0, 10)
-          .map(v => v.venue)
-      : []
-  )
+  // Top 10 venues by rating — shared with the concert cards so the badge stays consistent
+  const topTen = getTopVenueNames(venues)
 
   const filtered = venues
     .filter(v => !search || v.venue.toLowerCase().includes(search.toLowerCase()) || (v.city || '').toLowerCase().includes(search.toLowerCase()))

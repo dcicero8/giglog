@@ -9,6 +9,7 @@ import SetlistUrlInput from '../components/SetlistUrlInput'
 import StarRating from '../components/StarRating'
 import Modal from '../components/Modal'
 import FestivalImportModal from '../components/FestivalImportModal'
+import { getTopVenueNames } from '../lib/topVenues'
 
 const emptyForm = { artist: '', venue: '', city: '', date: '', end_date: '', price: '', rating: 0, notes: '', last_minute: false }
 
@@ -26,6 +27,8 @@ export default function Concerts() {
   const [highlightId, setHighlightId] = useState(null)
   const { data: aiStatus } = useApi('/ai-status')
   const aiAvailable = aiStatus?.available ?? false
+  const { data: venuesData } = useApi('/venues')
+  const topVenueNames = getTopVenueNames(venuesData || [])
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: setlistLoading, error: setlistError, setError: setSetlistError, importUrl, importFestival } = useSetlistImport()
   const [festivalData, setFestivalData] = useState(null)
   const [addDayFestivalId, setAddDayFestivalId] = useState(null) // festival ID to add a day to
@@ -423,6 +426,7 @@ export default function Concerts() {
                     onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
                     onAddDay={handleAddDay}
                     onRefetch={fetchConcerts}
+                    topVenue={topVenueNames.has(concert.venue)}
                   />
                 ) : (
                   <ConcertCard
@@ -433,6 +437,7 @@ export default function Concerts() {
                     aiAvailable={aiAvailable}
                     onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
                     setlistOpen={isSetlistOpen}
+                    topVenue={topVenueNames.has(concert.venue)}
                   />
                 )}
               </div>
