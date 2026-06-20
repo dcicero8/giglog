@@ -104,9 +104,10 @@ const US = (n) => `($${n}::int IS NULL OR user_id = $${n})`;
 // Count children (individual bands) as shows, but not festival parents themselves
 app.get('/api/stats', async (req, res) => {
   const uid = req.userId;
-  const childCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)}`, [uid])).count;
+  // A festival counts as ONE show (the event), not one per act
+  const festivalCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE ${US(1)} AND id IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)})`, [uid])).count;
   const soloCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NULL AND ${US(1)} AND id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)`, [uid])).count;
-  const concertCount = parseInt(soloCount) + parseInt(childCount);
+  const concertCount = parseInt(soloCount) + parseInt(festivalCount);
   const upcomingCount = (await db.queryRow(`SELECT COUNT(*) as count FROM upcoming WHERE ${US(1)}`, [uid])).count;
   const wishlistCount = (await db.queryRow(`SELECT COUNT(*) as count FROM wishlist WHERE ${US(1)}`, [uid])).count;
   const totalSpent = (await db.queryRow(`SELECT COALESCE(SUM(price), 0) as total FROM concerts WHERE ${US(1)}`, [uid])).total;
@@ -124,28 +125,43 @@ app.get('/api/stats', async (req, res) => {
   });
 });
 
-// Insights — trends + on-this-day. Festival children count as shows; parent containers don't.
+// Insights — trends + on-this-day.
+// "Shows" are events: a solo concert or a whole festival counts once (not per act).
+// Artists / venues / locations stay per-act so the lineups you saw are fully reflected.
 app.get('/api/insights', async (req, res) => {
   const uid = req.userId;
-  const rows = await db.queryRows(`
+
+  // Events = festival parents (one per festival) + solo shows
+  const events = await db.queryRows(`
     SELECT id, artist, venue, city, date FROM concerts
-      WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
-      AND ${US(1)}
+      WHERE ${US(1)} AND id IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)})
+    UNION ALL
+    SELECT id, artist, venue, city, date FROM concerts
+      WHERE ${US(1)} AND parent_concert_id IS NULL
+      AND id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)})
   `, [uid]);
 
-  const byYear = {}, byMonth = {}, artistCount = {}, venueVisits = {};
+  // Acts = every individual set (festival children + solo shows), for artist/venue/location stats
+  const acts = await db.queryRows(`
+    SELECT id, artist, venue, city, date FROM concerts
+      WHERE ${US(1)} AND id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)})
+  `, [uid]);
+
+  const byYear = {}, byMonth = {};
+  for (const e of events) {
+    if (!e.date) continue;
+    byYear[e.date.slice(0, 4)] = (byYear[e.date.slice(0, 4)] || 0) + 1;
+    const m = parseInt(e.date.slice(5, 7), 10);
+    if (m >= 1 && m <= 12) byMonth[m] = (byMonth[m] || 0) + 1;
+  }
+
+  const artistCount = {}, venueVisits = {};
   const cities = new Set(), states = new Set(), countries = new Set();
-  for (const r of rows) {
-    if (r.date) {
-      byYear[r.date.slice(0, 4)] = (byYear[r.date.slice(0, 4)] || 0) + 1;
-      const m = parseInt(r.date.slice(5, 7), 10);
-      if (m >= 1 && m <= 12) byMonth[m] = (byMonth[m] || 0) + 1;
-    }
+  for (const r of acts) {
     if (r.artist) artistCount[r.artist] = (artistCount[r.artist] || 0) + 1;
-    // Venue "visits" = distinct days, so a festival's many acts on one day count once
     if (r.venue) {
       if (!venueVisits[r.venue]) venueVisits[r.venue] = new Set();
-      venueVisits[r.venue].add(r.date || ('id:' + r.id));
+      venueVisits[r.venue].add(r.date || ('id:' + r.id)); // distinct days = visits
     }
     if (r.city) {
       cities.add(r.city);
@@ -157,25 +173,21 @@ app.get('/api/insights', async (req, res) => {
 
   const showsByYear = Object.entries(byYear).map(([year, count]) => ({ year, count })).sort((a, b) => a.year.localeCompare(b.year));
   const showsByMonth = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, count: byMonth[i + 1] || 0 }));
-  const rank = (obj) => Object.entries(obj).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
-  // On this day — same month/day in earlier years
+  // On this day — same month/day in earlier years (one entry per event, festivals shown once)
   const now = new Date();
   const md = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const onThisDay = rows
-    .filter(r => r.date && r.date.slice(5, 10) === md)
+  const onThisDay = events
+    .filter(e => e.date && e.date.slice(5, 10) === md)
     .sort((a, b) => b.date.localeCompare(a.date))
-    .map(r => ({ id: r.id, artist: r.artist, venue: r.venue, city: r.city, date: r.date }));
+    .map(e => ({ id: e.id, artist: e.artist, venue: e.venue, city: e.city, date: e.date }));
 
   res.json({
-    totalShows: rows.length,
+    totalShows: events.length,
     showsByYear,
     showsByMonth,
-    topArtists: rank(artistCount).slice(0, 12),
-    topVenues: Object.entries(venueVisits)
-      .map(([name, set]) => ({ name, count: set.size }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-      .slice(0, 12),
+    topArtists: Object.entries(artistCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 12),
+    topVenues: Object.entries(venueVisits).map(([name, set]) => ({ name, count: set.size })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 12),
     locations: { cities: cities.size, states: states.size, countries: countries.size },
     onThisDay,
   });
