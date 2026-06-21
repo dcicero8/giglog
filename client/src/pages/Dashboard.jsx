@@ -1,7 +1,10 @@
+import { useState, useEffect } from 'react'
 import { useApi } from '../hooks/useApi'
+import { api } from '../lib/api'
 import { Link, useNavigate } from 'react-router-dom'
 import CountdownBadge from '../components/CountdownBadge'
 import StarRating from '../components/StarRating'
+import WelcomeTour from '../components/WelcomeTour'
 
 export default function Dashboard() {
   const { data: stats } = useApi('/stats')
@@ -14,6 +17,15 @@ export default function Dashboard() {
   const { data: insights } = useApi('/insights')
   const navigate = useNavigate()
 
+  // On Deck (scouting) — seed from the Upcoming page's cache so it shows instantly, then refresh
+  const [onDeck, setOnDeck] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('giglog-ondeck-v1') || 'null')?.events || [] } catch { return [] }
+  })
+  useEffect(() => {
+    api.get('/seatgeek/events').then(d => setOnDeck(d || [])).catch(() => { /* not configured / offline */ })
+  }, [])
+  const onDeckBadges = onDeck.slice(0, 10)
+
   const nextShows = upcoming?.slice(0, 10) || []
   const recentConcerts = concerts?.slice(0, 5) || []
   const topWishlist = wishlist?.slice(0, 3) || []
@@ -25,6 +37,8 @@ export default function Dashboard() {
   const onThisDay = insights?.onThisDay || []
   const thisYear = new Date().getFullYear()
   const hasOnThisDay = onThisDay.length > 0
+  // First-time user: nothing logged or upcoming yet
+  const isNewUser = !!stats && stats.concertCount === 0 && stats.upcomingCount === 0
 
   const fmtShort = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 
@@ -67,6 +81,26 @@ export default function Dashboard() {
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Coming up near you — quick badges from On Deck */}
+          {onDeckBadges.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[11px] text-text-dim uppercase tracking-wider mb-2">Coming up near you</p>
+              <div className="flex flex-wrap gap-2">
+                {onDeckBadges.map(e => (
+                  <Link
+                    key={e.id}
+                    to="/upcoming"
+                    title={`${e.artist}${e.venue ? ' · ' + e.venue : ''}`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-card border border-border hover:border-border-hover hover:bg-bg-card-hover text-xs text-text no-underline transition-colors"
+                  >
+                    <span className="font-medium truncate max-w-[150px]">{e.artist}</span>
+                    {e.date && <span className="text-text-dim">{new Date(e.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
         </section>
@@ -191,6 +225,8 @@ export default function Dashboard() {
           </div>
         </section>
       )}
+
+      <WelcomeTour isNewUser={isNewUser} />
     </div>
   )
 }
