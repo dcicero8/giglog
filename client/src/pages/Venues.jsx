@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import StarRating from '../components/StarRating'
+import TopVenueBadge from '../components/TopVenueBadge'
 import { getTopVenueNames } from '../lib/topVenues'
 
 export default function Venues() {
@@ -93,11 +94,7 @@ export default function Venues() {
               <div className="flex-1 min-w-[200px]">
                 <h3 className="font-heading font-bold text-sm text-text flex items-center gap-2">
                   {v.venue}
-                  {topTen.has(v.venue) && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/15 text-accent whitespace-nowrap" title="One of your top 10 rated venues">
-                      🏆 Top 10
-                    </span>
-                  )}
+                  {topTen.has(v.venue) && <TopVenueBadge />}
                 </h3>
                 <div className="flex items-center gap-3 mt-1 text-xs text-text-muted">
                   {v.city && <span>{v.city}</span>}

@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 import StarRating from './StarRating'
 import SetlistViewer from './SetlistViewer'
+import TopVenueBadge from './TopVenueBadge'
 
 export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onAddDay, onRefetch, topVenue }) {
   const [expanded, setExpanded] = useState(false)
@@ -355,11 +356,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             <h3 className="font-heading font-bold text-lg text-text">{concert.artist}</h3>
             <p className="text-sm text-text-muted mt-1 flex items-center gap-2 flex-wrap">
               <span>{[concert.venue, concert.city].filter(Boolean).join(' · ')}</span>
-              {topVenue && (
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/15 text-accent whitespace-nowrap" title="One of your top 10 rated venues">
-                  🏆 Top 10
-                </span>
-              )}
+              {topVenue && <TopVenueBadge />}
             </p>
             {formattedDate && (
               <p className="text-sm text-text-muted mt-0.5">{formattedDate}</p>

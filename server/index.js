@@ -99,14 +99,19 @@ app.use('/api/buddies', buddiesRouter);
 
 // User scope helper — shows own data only (dev mode with null userId sees everything)
 const US = (n) => `($${n}::int IS NULL OR user_id = $${n})`;
+// Festival "parent" containers are concerts that have children pointing at them.
+// $n is the user param index (same one the surrounding query uses).
+const FESTIVAL_PARENT_IDS = (n) => `SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(n)}`;
+const NOT_FESTIVAL_PARENT = (n) => `id NOT IN (${FESTIVAL_PARENT_IDS(n)})`;
+const IS_FESTIVAL_PARENT = (n) => `id IN (${FESTIVAL_PARENT_IDS(n)})`;
 
 // Stats endpoint for dashboard
 // Count children (individual bands) as shows, but not festival parents themselves
 app.get('/api/stats', async (req, res) => {
   const uid = req.userId;
   // A festival counts as ONE show (the event), not one per act
-  const festivalCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE ${US(1)} AND id IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)})`, [uid])).count;
-  const soloCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NULL AND ${US(1)} AND id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)`, [uid])).count;
+  const festivalCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE ${US(1)} AND ${IS_FESTIVAL_PARENT(1)}`, [uid])).count;
+  const soloCount = (await db.queryRow(`SELECT COUNT(*) as count FROM concerts WHERE parent_concert_id IS NULL AND ${US(1)} AND ${NOT_FESTIVAL_PARENT(1)}`, [uid])).count;
   const concertCount = parseInt(soloCount) + parseInt(festivalCount);
   const upcomingCount = (await db.queryRow(`SELECT COUNT(*) as count FROM upcoming WHERE ${US(1)}`, [uid])).count;
   const wishlistCount = (await db.queryRow(`SELECT COUNT(*) as count FROM wishlist WHERE ${US(1)}`, [uid])).count;
@@ -134,17 +139,17 @@ app.get('/api/insights', async (req, res) => {
   // Events = festival parents (one per festival) + solo shows
   const events = await db.queryRows(`
     SELECT id, artist, venue, city, date FROM concerts
-      WHERE ${US(1)} AND id IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)})
+      WHERE ${US(1)} AND ${IS_FESTIVAL_PARENT(1)}
     UNION ALL
     SELECT id, artist, venue, city, date FROM concerts
       WHERE ${US(1)} AND parent_concert_id IS NULL
-      AND id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)})
+      AND ${NOT_FESTIVAL_PARENT(1)}
   `, [uid]);
 
   // Acts = every individual set (festival children + solo shows), for artist/venue/location stats
   const acts = await db.queryRows(`
     SELECT id, artist, venue, city, date FROM concerts
-      WHERE ${US(1)} AND id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL AND ${US(1)})
+      WHERE ${US(1)} AND ${NOT_FESTIVAL_PARENT(1)}
   `, [uid]);
 
   const byYear = {}, byMonth = {};
@@ -200,7 +205,7 @@ app.get('/api/artists', async (req, res) => {
   // A festival parent is a concert that has children pointing to it
   const artists = await db.queryRows(`
     SELECT artist, 'concert' as source, date, price, rating FROM concerts
-      WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+      WHERE ${NOT_FESTIVAL_PARENT(1)}
       AND ${US(1)}
     UNION ALL
     SELECT artist, 'upcoming' as source, date, price, NULL as rating FROM upcoming WHERE ${US(1)}
@@ -247,7 +252,7 @@ app.get('/api/venues', async (req, res) => {
   // Real concerts only (exclude festival parent containers) that have a venue
   const rows = await db.queryRows(`
     SELECT id, venue, city, date, price, rating, artist FROM concerts
-      WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+      WHERE ${NOT_FESTIVAL_PARENT(1)}
       AND venue IS NOT NULL AND venue <> ''
       AND ${US(1)}
   `, [uid]);
@@ -383,7 +388,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
     const wishlistArtists = await db.queryRows(`SELECT artist FROM wishlist WHERE ${US(1)}`, [uid]);
     const pastArtists = await db.queryRows(
       `SELECT DISTINCT artist FROM concerts
-       WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+       WHERE ${NOT_FESTIVAL_PARENT(1)}
        AND ${US(1)}`,
       [uid]
     );
@@ -575,7 +580,7 @@ Return ONLY the JSON, no markdown, no explanation.`,
 app.get('/api/past-artists', async (req, res) => {
   const rows = await db.queryRows(
     `SELECT DISTINCT artist FROM concerts
-     WHERE id NOT IN (SELECT DISTINCT parent_concert_id FROM concerts WHERE parent_concert_id IS NOT NULL)
+     WHERE ${NOT_FESTIVAL_PARENT(1)}
      AND ${US(1)}`,
     [req.userId]
   );
