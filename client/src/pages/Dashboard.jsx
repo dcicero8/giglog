@@ -60,7 +60,7 @@ export default function Dashboard() {
     refetchStats()
   }
 
-  const nextShows = upcoming?.slice(0, 3) || []
+  const nextShows = upcoming?.slice(0, 6) || []
   const recentConcerts = concerts?.slice(0, 5) || []
   const topWishlist = wishlist?.slice(0, 3) || []
   // Posters from the most recent shows that have one (concerts come back newest-first)
@@ -79,6 +79,38 @@ export default function Dashboard() {
         </h1>
         <p className="text-sm text-text-muted">Never miss a concert again</p>
       </div>
+
+      {/* Next Up — upcoming shows (primary dashboard focus) */}
+      <section className="mb-10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-heading font-bold text-text">Next Up</h2>
+          <Link to="/upcoming" className="text-sm text-text-muted hover:text-secondary no-underline">View All →</Link>
+        </div>
+        {nextShows.length === 0 ? (
+          <div className="bg-bg-card border border-border rounded-xl p-6 text-center">
+            <p className="text-text-muted text-sm">No upcoming shows yet. Add one above, or check your <Link to="/wishlist" className="text-secondary">wishlist</Link>.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {nextShows.map(show => (
+              <button
+                key={show.id}
+                onClick={() => navigate(`/upcoming?highlight=${show.id}`)}
+                className="text-left bg-bg-card border border-border rounded-xl p-4 hover:bg-bg-card-hover hover:border-border-hover transition-colors cursor-pointer"
+              >
+                <h3 className="font-heading font-bold text-sm text-text truncate mb-1">{show.artist}</h3>
+                <p className="text-xs text-text-muted mb-2 truncate">{[show.venue, show.city].filter(Boolean).join(' · ')}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-muted">
+                    {show.date && new Date(show.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                  <CountdownBadge date={show.date} />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* On This Day */}
       {onThisDay.length > 0 && (
@@ -162,32 +194,6 @@ export default function Dashboard() {
           onClearError={() => setError(null)}
         />
       </div>
-
-      {/* Next Upcoming Shows */}
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-heading font-bold text-text">Next Up</h2>
-          <Link to="/upcoming" className="text-sm text-text-muted hover:text-secondary no-underline">View All →</Link>
-        </div>
-        {nextShows.length === 0 ? (
-          <p className="text-text-muted text-sm">No upcoming shows. Check your <Link to="/wishlist" className="text-secondary">wishlist</Link>!</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {nextShows.map(show => (
-              <div key={show.id} className="bg-bg-card border border-border rounded-xl p-4 hover:bg-bg-card-hover transition-colors">
-                <h3 className="font-heading font-bold text-sm text-text truncate mb-1">{show.artist}</h3>
-                <p className="text-xs text-text-muted mb-2">{[show.venue, show.city].filter(Boolean).join(' · ')}</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-text-muted">
-                    {show.date && new Date(show.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </span>
-                  <CountdownBadge date={show.date} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       {/* Recent Concerts */}
       <section className="mb-10">
