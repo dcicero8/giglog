@@ -1,66 +1,20 @@
-import { useState } from 'react'
 import { useApi } from '../hooks/useApi'
-import { useSetlistImport } from '../hooks/useSetlistImport'
-import { api } from '../lib/api'
 import { Link, useNavigate } from 'react-router-dom'
 import CountdownBadge from '../components/CountdownBadge'
 import StarRating from '../components/StarRating'
-import SetlistUrlInput from '../components/SetlistUrlInput'
-import Modal from '../components/Modal'
-import FestivalImportModal from '../components/FestivalImportModal'
 
 export default function Dashboard() {
-  const { data: stats, refetch: refetchStats } = useApi('/stats')
+  const { data: stats } = useApi('/stats')
   const { data: upcoming } = useApi('/upcoming')
-  const { data: concerts, refetch: refetchConcerts } = useApi('/concerts')
+  const { data: concerts } = useApi('/concerts')
   const { data: wishlist } = useApi('/wishlist')
   const { data: artists } = useApi('/artists')
   const { data: venues } = useApi('/venues')
   const { data: songsData } = useApi('/songs')
   const { data: insights } = useApi('/insights')
-  const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: importLoading, error: importError, setError, importUrl, importById, importFestival } = useSetlistImport()
   const navigate = useNavigate()
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState(null)
-  const [festivalData, setFestivalData] = useState(null)
-
-  const handleImport = async () => {
-    const result = await importUrl()
-    if (result) {
-      setForm(result)
-      setModalOpen(true)
-    }
-  }
-
-  const handleImportById = async (setlistId) => {
-    const result = await importById(setlistId)
-    if (result) {
-      setForm(result)
-      setModalOpen(true)
-    }
-  }
-
-  const handleFestivalImport = async () => {
-    const result = await importFestival()
-    if (result) {
-      setFestivalData(result)
-    }
-  }
-
-  const handleSave = async (e) => {
-    e.preventDefault()
-    await api.post('/concerts', {
-      ...form,
-      price: form.price ? parseFloat(form.price) : null,
-    })
-    setModalOpen(false)
-    setForm(null)
-    refetchConcerts()
-    refetchStats()
-  }
-
-  const nextShows = upcoming?.slice(0, 6) || []
+  const nextShows = upcoming?.slice(0, 10) || []
   const recentConcerts = concerts?.slice(0, 5) || []
   const topWishlist = wishlist?.slice(0, 3) || []
   // Posters from the most recent shows that have one (concerts come back newest-first)
@@ -70,6 +24,9 @@ export default function Dashboard() {
   const songsHeard = songsData?.stats?.totalSongs ?? null
   const onThisDay = insights?.onThisDay || []
   const thisYear = new Date().getFullYear()
+  const hasOnThisDay = onThisDay.length > 0
+
+  const fmtShort = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 
   return (
     <div>
@@ -80,64 +37,69 @@ export default function Dashboard() {
         <p className="text-sm text-text-muted">Never miss a concert again</p>
       </div>
 
-      {/* Next Up — upcoming shows (primary dashboard focus) */}
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-heading font-bold text-text">Next Up</h2>
-          <Link to="/upcoming" className="text-sm text-text-muted hover:text-secondary no-underline">View All →</Link>
-        </div>
-        {nextShows.length === 0 ? (
-          <div className="bg-bg-card border border-border rounded-xl p-6 text-center">
-            <p className="text-text-muted text-sm">No upcoming shows yet. Add one above, or check your <Link to="/wishlist" className="text-secondary">wishlist</Link>.</p>
+      {/* Next Up + On This Day (side by side) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+        {/* Next Up — the next 10 upcoming shows */}
+        <section className={hasOnThisDay ? 'lg:col-span-2' : 'lg:col-span-3'}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-heading font-bold text-text">Next Up</h2>
+            <Link to="/upcoming" className="text-sm text-text-muted hover:text-secondary no-underline">View All →</Link>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {nextShows.map(show => (
-              <button
-                key={show.id}
-                onClick={() => navigate(`/upcoming?highlight=${show.id}`)}
-                className="text-left bg-bg-card border border-border rounded-xl p-4 hover:bg-bg-card-hover hover:border-border-hover transition-colors cursor-pointer"
-              >
-                <h3 className="font-heading font-bold text-sm text-text truncate mb-1">{show.artist}</h3>
-                <p className="text-xs text-text-muted mb-2 truncate">{[show.venue, show.city].filter(Boolean).join(' · ')}</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-text-muted">
-                    {show.date && new Date(show.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                  <CountdownBadge date={show.date} />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* On This Day */}
-      {onThisDay.length > 0 && (
-        <section className="mb-8 bg-bg-card border border-border rounded-xl p-4">
-          <h2 className="text-sm font-heading font-bold text-text mb-3">📅 On This Day</h2>
-          <div className="space-y-1">
-            {onThisDay.map(s => {
-              const yearsAgo = thisYear - parseInt(s.date.slice(0, 4), 10)
-              return (
+          {nextShows.length === 0 ? (
+            <div className="bg-bg-card border border-border rounded-xl p-6 text-center">
+              <p className="text-text-muted text-sm">No upcoming shows yet. Add one on the <Link to="/upcoming" className="text-secondary">Upcoming</Link> page, or check your <Link to="/wishlist" className="text-secondary">wishlist</Link>.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {nextShows.map(show => (
                 <button
-                  key={s.id}
-                  onClick={() => navigate(`/concerts?highlight=${s.id}`)}
-                  className="w-full flex items-center gap-3 text-left bg-transparent border-0 cursor-pointer p-1.5 rounded-lg hover:bg-bg-card-hover transition-colors"
+                  key={show.id}
+                  onClick={() => navigate(`/upcoming?highlight=${show.id}`)}
+                  className="w-full text-left flex items-center gap-3 bg-bg-card border border-border rounded-lg p-3 hover:bg-bg-card-hover hover:border-border-hover transition-colors cursor-pointer"
                 >
-                  <span className="text-xs text-accent font-semibold w-[72px] shrink-0">
-                    {yearsAgo <= 0 ? 'Today' : `${yearsAgo} yr${yearsAgo !== 1 ? 's' : ''} ago`}
-                  </span>
-                  <span className="flex-1 min-w-0 text-sm text-text truncate">{s.artist}</span>
-                  <span className="text-xs text-text-muted truncate hidden sm:block">
-                    {[s.venue, s.city].filter(Boolean).join(' · ')}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-heading font-bold text-sm text-text truncate">{show.artist}</p>
+                    <p className="text-xs text-text-muted truncate">{[show.venue, show.city].filter(Boolean).join(' · ')}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-text-muted hidden sm:inline">{fmtShort(show.date)}</span>
+                    <CountdownBadge date={show.date} />
+                  </div>
                 </button>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
-      )}
+
+        {/* On This Day — compact box beside upcoming */}
+        {hasOnThisDay && (
+          <section className="lg:col-span-1">
+            <div className="flex items-center mb-4">
+              <h2 className="text-lg font-heading font-bold text-text">📅 On This Day</h2>
+            </div>
+            <div className="bg-bg-card border border-border rounded-xl p-3 space-y-0.5">
+              {onThisDay.map(s => {
+                const yearsAgo = thisYear - parseInt(s.date.slice(0, 4), 10)
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => navigate(`/concerts?highlight=${s.id}`)}
+                    className="w-full text-left block p-1.5 rounded-lg hover:bg-bg-card-hover transition-colors"
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs text-accent font-semibold shrink-0">
+                        {yearsAgo <= 0 ? 'Today' : `${yearsAgo} yr${yearsAgo !== 1 ? 's' : ''} ago`}
+                      </span>
+                      <span className="text-sm text-text truncate">{s.artist}</span>
+                    </div>
+                    <p className="text-xs text-text-muted truncate">{[s.venue, s.city].filter(Boolean).join(' · ')}</p>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        )}
+      </div>
 
       {/* Recent show posters */}
       {recentPosters.length > 0 && (
@@ -170,29 +132,13 @@ export default function Dashboard() {
       )}
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
         <StatCard label="Shows Attended" value={stats?.concertCount ?? '—'} to="/concerts" />
         <StatCard label="Artists Seen" value={artistsSeen ?? '—'} color="text-success" to="/artists" />
         <StatCard label="Venues Attended" value={venuesAttended ?? '—'} to="/venues" />
         <StatCard label="Songs Heard" value={songsHeard ?? '—'} color="text-warning" to="/songs" />
         <StatCard label="Upcoming" value={stats?.upcomingCount ?? '—'} color="text-secondary" to="/upcoming" />
         <StatCard label="Wishlist" value={stats?.wishlistCount ?? '—'} color="text-accent" to="/wishlist" />
-      </div>
-
-      {/* Quick Import */}
-      <div className="mb-10">
-        <SetlistUrlInput
-          url={setlistUrl}
-          onUrlChange={setSetlistUrl}
-          altUrl={altSetlistUrl}
-          onAltUrlChange={setAltSetlistUrl}
-          onImport={handleImport}
-          onImportById={handleImportById}
-          onFestivalImport={handleFestivalImport}
-          loading={importLoading}
-          error={importError}
-          onClearError={() => setError(null)}
-        />
       </div>
 
       {/* Recent Concerts */}
@@ -245,65 +191,6 @@ export default function Dashboard() {
           </div>
         </section>
       )}
-
-      {/* Festival Import Modal */}
-      {festivalData && (
-        <FestivalImportModal
-          data={festivalData}
-          onClose={() => setFestivalData(null)}
-          onComplete={() => { refetchConcerts(); refetchStats() }}
-        />
-      )}
-
-      {/* Quick Import Save Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add Concert">
-        {form && (
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Artist *</label>
-              <input type="text" required value={form.artist} onChange={e => setForm({ ...form, artist: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm text-text-muted mb-1">Venue</label>
-                <input type="text" value={form.venue} onChange={e => setForm({ ...form, venue: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary" />
-              </div>
-              <div>
-                <label className="block text-sm text-text-muted mb-1">City</label>
-                <input type="text" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm text-text-muted mb-1">Date</label>
-                <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary" />
-              </div>
-              <div>
-                <label className="block text-sm text-text-muted mb-1">Price</label>
-                <input type="number" step="0.01" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary" placeholder="0.00" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Rating</label>
-              <StarRating rating={form.rating} onChange={r => setForm({ ...form, rating: r })} />
-            </div>
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Notes</label>
-              <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2}
-                className="w-full px-3 py-2 text-sm rounded-lg bg-bg-input border border-border text-text focus:outline-none focus:border-secondary resize-y" />
-            </div>
-            <button type="submit"
-              className="w-full px-4 py-2.5 text-sm font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer">
-              Add Concert
-            </button>
-          </form>
-        )}
-      </Modal>
     </div>
   )
 }
