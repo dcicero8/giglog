@@ -9,6 +9,22 @@ import Modal from '../components/Modal'
 
 const emptyForm = { artist: '', venue: '', city: '', date: '', price: '', section: '', last_minute: false, notes: '' }
 
+const ONDECK_CACHE = 'giglog-ondeck-v1'
+function readOnDeckCache() {
+  try { return JSON.parse(localStorage.getItem(ONDECK_CACHE) || 'null') } catch { return null }
+}
+
+// Normalize an artist name for exact matching — case/punctuation/"the"-insensitive.
+// Prevents false "seen before" matches from loose substring comparisons.
+function normalizeArtist(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/^the\s+/, '')
+}
+
 export default function Upcoming() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: shows, loading, refetch } = useApi('/upcoming')
@@ -43,10 +59,10 @@ export default function Upcoming() {
     }
   }, [searchParams, loading, shows, setSearchParams])
 
-  // On Deck (SeatGeek)
-  const [seatgeekAvailable, setSeatgeekAvailable] = useState(false)
-  const [onDeckEvents, setOnDeckEvents] = useState([])
-  const [onDeckLoading, setOnDeckLoading] = useState(true)
+  // On Deck (SeatGeek) — seed from a local cache so the page isn't blank on first load
+  const [seatgeekAvailable, setSeatgeekAvailable] = useState(() => readOnDeckCache()?.available ?? false)
+  const [onDeckEvents, setOnDeckEvents] = useState(() => readOnDeckCache()?.events || [])
+  const [onDeckLoading, setOnDeckLoading] = useState(() => !(readOnDeckCache()?.events?.length))
   const [onDeckError, setOnDeckError] = useState(null)
   const [dismissedArtists, setDismissedArtists] = useState(new Set())
 
@@ -66,6 +82,7 @@ export default function Upcoming() {
         ])
         setOnDeckEvents(events)
         setDismissedArtists(new Set(dismissed))
+        try { localStorage.setItem(ONDECK_CACHE, JSON.stringify({ available: true, events })) } catch { /* ignore quota */ }
       } catch (err) {
         console.error('SeatGeek fetch error:', err)
         setOnDeckError(err.message)
@@ -208,35 +225,24 @@ export default function Upcoming() {
     }
   }
 
-  // Build sets for matching (case-insensitive, fuzzy)
-  const wishlistNames = new Set((wishlist || []).map(w => w.artist.toLowerCase()))
-  const pastArtistNames = new Set((pastArtists || []).map(a => a.toLowerCase()))
+  // Exact-match sets (normalized) so we only flag artists you've actually seen / wishlisted
+  const wishlistNames = new Set((wishlist || []).map(w => normalizeArtist(w.artist)).filter(Boolean))
+  const pastArtistNames = new Set((pastArtists || []).map(a => normalizeArtist(a)).filter(Boolean))
 
-  const fuzzyMatch = (artistName, nameSet) => {
-    if (!artistName) return false
-    const lower = artistName.toLowerCase()
-    for (const name of nameSet) {
-      if (lower.includes(name) || name.includes(lower)) return true
-    }
-    return false
-  }
+  const isWishlistMatch = (artistName) => wishlistNames.has(normalizeArtist(artistName))
+  const isPastArtistMatch = (artistName) => pastArtistNames.has(normalizeArtist(artistName))
 
-  const isWishlistMatch = (artistName) => fuzzyMatch(artistName, wishlistNames)
-  const isPastArtistMatch = (artistName) => fuzzyMatch(artistName, pastArtistNames)
-
+  // Push the shows you should know about (wishlist, then seen-before) to the top; soonest first within a tier
   const visibleOnDeck = onDeckEvents
     .filter(e => !dismissedArtists.has(e.artist))
     .sort((a, b) => {
-      const aWishlist = isWishlistMatch(a.artist) || isWishlistMatch(a.title)
-      const bWishlist = isWishlistMatch(b.artist) || isWishlistMatch(b.title)
-      const aPast = isPastArtistMatch(a.artist) || isPastArtistMatch(a.title)
-      const bPast = isPastArtistMatch(b.artist) || isPastArtistMatch(b.title)
-      // Priority: wishlist first, then past artists, then everything else
-      const aScore = aWishlist ? 2 : aPast ? 1 : 0
-      const bScore = bWishlist ? 2 : bPast ? 1 : 0
+      const aScore = isWishlistMatch(a.artist) ? 2 : isPastArtistMatch(a.artist) ? 1 : 0
+      const bScore = isWishlistMatch(b.artist) ? 2 : isPastArtistMatch(b.artist) ? 1 : 0
       if (aScore !== bScore) return bScore - aScore
-      return 0 // preserve date order otherwise
+      return (a.date || '').localeCompare(b.date || '')
     })
+
+  const knownCount = visibleOnDeck.filter(e => isWishlistMatch(e.artist) || isPastArtistMatch(e.artist)).length
 
   return (
     <div>
@@ -344,7 +350,10 @@ export default function Upcoming() {
                   </button>
                 )}
                 {visibleOnDeck.length > 0 && (
-                  <span className="text-xs text-text-dim">{visibleOnDeck.length} shows</span>
+                  <span className="text-xs text-text-dim">
+                    {knownCount > 0 && <span className="text-secondary font-medium">{knownCount} for you · </span>}
+                    {visibleOnDeck.length} shows
+                  </span>
                 )}
               </div>
             </div>
@@ -377,8 +386,8 @@ export default function Upcoming() {
                     event={event}
                     onSave={handleSaveOnDeck}
                     onDismiss={handleDismiss}
-                    isWishlist={isWishlistMatch(event.artist) || isWishlistMatch(event.title)}
-                    isPastArtist={isPastArtistMatch(event.artist) || isPastArtistMatch(event.title)}
+                    isWishlist={isWishlistMatch(event.artist)}
+                    isPastArtist={isPastArtistMatch(event.artist)}
                   />
                 ))}
               </div>
