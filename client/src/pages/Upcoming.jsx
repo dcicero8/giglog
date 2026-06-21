@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import UpcomingCard from '../components/UpcomingCard'
 import OnDeckCard from '../components/OnDeckCard'
+import { onDeckMatchers, sortForYou } from '../lib/onDeck'
 import StarRating from '../components/StarRating'
 import Modal from '../components/Modal'
 
@@ -15,17 +16,6 @@ function readOnDeckCache() {
 }
 function writeOnDeckCache(data) {
   try { localStorage.setItem(ONDECK_CACHE, JSON.stringify(data)) } catch { /* ignore quota */ }
-}
-
-// Normalize an artist name for exact matching — case/punctuation/"the"-insensitive.
-// Prevents false "seen before" matches from loose substring comparisons.
-function normalizeArtist(s) {
-  return (s || '')
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-    .replace(/^the\s+/, '')
 }
 
 export default function Upcoming() {
@@ -230,22 +220,16 @@ export default function Upcoming() {
     }
   }
 
-  // Exact-match sets (normalized) so we only flag artists you've actually seen / wishlisted
-  const wishlistNames = new Set((wishlist || []).map(w => normalizeArtist(w.artist)).filter(Boolean))
-  const pastArtistNames = new Set((pastArtists || []).map(a => normalizeArtist(a)).filter(Boolean))
+  // Exact-match predicates so we only flag artists you've actually seen / wishlisted
+  const matchers = onDeckMatchers(pastArtists, wishlist)
+  const isWishlistMatch = matchers.isWishlist
+  const isPastArtistMatch = matchers.isPast
 
-  const isWishlistMatch = (artistName) => wishlistNames.has(normalizeArtist(artistName))
-  const isPastArtistMatch = (artistName) => pastArtistNames.has(normalizeArtist(artistName))
-
-  // Push the shows you should know about (wishlist, then seen-before) to the top; soonest first within a tier
-  const visibleOnDeck = onDeckEvents
-    .filter(e => !dismissedArtists.has(e.artist))
-    .sort((a, b) => {
-      const aScore = isWishlistMatch(a.artist) ? 2 : isPastArtistMatch(a.artist) ? 1 : 0
-      const bScore = isWishlistMatch(b.artist) ? 2 : isPastArtistMatch(b.artist) ? 1 : 0
-      if (aScore !== bScore) return bScore - aScore
-      return (a.date || '').localeCompare(b.date || '')
-    })
+  // Push the shows you should know about (wishlist, then seen-before) to the top
+  const visibleOnDeck = sortForYou(
+    onDeckEvents.filter(e => !dismissedArtists.has(e.artist)),
+    matchers
+  )
 
   const knownCount = visibleOnDeck.filter(e => isWishlistMatch(e.artist) || isPastArtistMatch(e.artist)).length
 

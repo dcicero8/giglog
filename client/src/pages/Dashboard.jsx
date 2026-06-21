@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import CountdownBadge from '../components/CountdownBadge'
 import StarRating from '../components/StarRating'
 import WelcomeTour from '../components/WelcomeTour'
+import { onDeckMatchers, sortForYou } from '../lib/onDeck'
 
 export default function Dashboard() {
   const { data: stats } = useApi('/stats')
@@ -15,6 +16,7 @@ export default function Dashboard() {
   const { data: venues } = useApi('/venues')
   const { data: songsData } = useApi('/songs')
   const { data: insights } = useApi('/insights')
+  const { data: pastArtists } = useApi('/past-artists')
   const navigate = useNavigate()
 
   // On Deck (scouting) — seed from the Upcoming page's cache so it shows instantly, then refresh
@@ -24,7 +26,9 @@ export default function Dashboard() {
   useEffect(() => {
     api.get('/seatgeek/events').then(d => setOnDeck(d || [])).catch(() => { /* not configured / offline */ })
   }, [])
-  const onDeckBadges = onDeck.slice(0, 10)
+  // Top 10 "for you" — wishlist / seen-before float to the top
+  const onDeckMatch = onDeckMatchers(pastArtists, wishlist)
+  const onDeckBadges = sortForYou(onDeck, onDeckMatch).slice(0, 10)
 
   const nextShows = upcoming?.slice(0, 10) || []
   const recentConcerts = concerts?.slice(0, 5) || []
@@ -84,22 +88,33 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Coming up near you — quick badges from On Deck */}
+          {/* On Deck — top 10 picks near you (wishlist / seen-before first) */}
           {onDeckBadges.length > 0 && (
             <div className="mt-4">
-              <p className="text-[11px] text-text-dim uppercase tracking-wider mb-2">Coming up near you</p>
+              <Link to="/upcoming" className="text-[11px] text-text-dim uppercase tracking-wider mb-2 inline-block hover:text-secondary no-underline">On Deck near you →</Link>
               <div className="flex flex-wrap gap-2">
-                {onDeckBadges.map(e => (
-                  <Link
-                    key={e.id}
-                    to="/upcoming"
-                    title={`${e.artist}${e.venue ? ' · ' + e.venue : ''}`}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-card border border-border hover:border-border-hover hover:bg-bg-card-hover text-xs text-text no-underline transition-colors"
-                  >
-                    <span className="font-medium truncate max-w-[150px]">{e.artist}</span>
-                    {e.date && <span className="text-text-dim">{new Date(e.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
-                  </Link>
-                ))}
+                {onDeckBadges.map(e => {
+                  const wish = onDeckMatch.isWishlist(e.artist)
+                  const seen = !wish && onDeckMatch.isPast(e.artist)
+                  const tone = wish
+                    ? 'bg-warning/10 border-warning/30 text-warning'
+                    : seen
+                      ? 'bg-secondary/10 border-secondary/30 text-secondary'
+                      : 'bg-bg-card border-border text-text'
+                  return (
+                    <Link
+                      key={e.id}
+                      to="/upcoming"
+                      title={`${e.artist}${wish ? ' · wishlist' : seen ? ' · seen before' : ''}${e.venue ? ' · ' + e.venue : ''}`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border hover:bg-bg-card-hover text-xs no-underline transition-colors ${tone}`}
+                    >
+                      {wish && <span>★</span>}
+                      {seen && <span>↻</span>}
+                      <span className="font-medium truncate max-w-[150px]">{e.artist}</span>
+                      {e.date && <span className="text-text-dim">{new Date(e.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                    </Link>
+                  )
+                })}
               </div>
             </div>
           )}

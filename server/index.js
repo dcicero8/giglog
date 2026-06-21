@@ -339,7 +339,7 @@ app.get('/api/seatgeek/status', (req, res) => {
 app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
-  const cacheKey = 'seatgeek_la_concerts_6mo_v5';
+  const cacheKey = 'seatgeek_la_concerts_6mo_v6';
   const cached = await db.queryRow('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = $1', [cacheKey]);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
@@ -378,12 +378,20 @@ app.get('/api/seatgeek/events', async (req, res) => {
       ...(process.env.SEATGEEK_CLIENT_SECRET ? { 'client_secret': process.env.SEATGEEK_CLIENT_SECRET } : {}),
     };
 
-    // 1. General LA events feed (discovery)
-    const generalParams = new URLSearchParams({ ...baseParams, 'per_page': '200' });
-    const generalRes = await fetch(`https://api.seatgeek.com/2/events?${generalParams}`);
-    if (!generalRes.ok) throw new Error(`SeatGeek API returned ${generalRes.status}`);
-    const generalData = await generalRes.json();
-    const generalEvents = (generalData.events || []).map(mapEvent);
+    // 1. General LA events feed (discovery) — paginate so a 6-month window isn't capped at the soonest 200
+    const generalEvents = [];
+    for (let page = 1; page <= 3; page++) {
+      const generalParams = new URLSearchParams({ ...baseParams, 'per_page': '200', 'page': String(page) });
+      const generalRes = await fetch(`https://api.seatgeek.com/2/events?${generalParams}`);
+      if (!generalRes.ok) {
+        if (page === 1) throw new Error(`SeatGeek API returned ${generalRes.status}`);
+        break;
+      }
+      const generalData = await generalRes.json();
+      const evs = generalData.events || [];
+      generalEvents.push(...evs.map(mapEvent));
+      if (evs.length < 200) break; // reached the end
+    }
 
     // 2. Targeted searches for wishlist + past concert artists (guarantees they appear)
     const uid = req.userId;

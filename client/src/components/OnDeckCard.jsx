@@ -44,11 +44,6 @@ export default function OnDeckCard({ event, onSave, onDismiss, isWishlist, isPas
             ↻ Seen Before
           </span>
         )}
-        {!isWishlist && !isPastArtist && (
-          <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-white/5 text-text-dim mb-2">
-            ✨ New to you
-          </span>
-        )}
         <div className="flex items-start justify-between gap-1">
           <h3 className="font-heading font-bold text-sm text-text truncate mb-1">{event.artist}</h3>
           {/* Dismiss button fallback when no image */}
