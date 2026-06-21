@@ -13,6 +13,9 @@ const ONDECK_CACHE = 'giglog-ondeck-v1'
 function readOnDeckCache() {
   try { return JSON.parse(localStorage.getItem(ONDECK_CACHE) || 'null') } catch { return null }
 }
+function writeOnDeckCache(data) {
+  try { localStorage.setItem(ONDECK_CACHE, JSON.stringify(data)) } catch { /* ignore quota */ }
+}
 
 // Normalize an artist name for exact matching — case/punctuation/"the"-insensitive.
 // Prevents false "seen before" matches from loose substring comparisons.
@@ -64,7 +67,7 @@ export default function Upcoming() {
   const [onDeckEvents, setOnDeckEvents] = useState(() => readOnDeckCache()?.events || [])
   const [onDeckLoading, setOnDeckLoading] = useState(() => !(readOnDeckCache()?.events?.length))
   const [onDeckError, setOnDeckError] = useState(null)
-  const [dismissedArtists, setDismissedArtists] = useState(new Set())
+  const [dismissedArtists, setDismissedArtists] = useState(() => new Set(readOnDeckCache()?.dismissed || []))
 
   useEffect(() => {
     const fetchSeatGeek = async () => {
@@ -82,7 +85,7 @@ export default function Upcoming() {
         ])
         setOnDeckEvents(events)
         setDismissedArtists(new Set(dismissed))
-        try { localStorage.setItem(ONDECK_CACHE, JSON.stringify({ available: true, events })) } catch { /* ignore quota */ }
+        writeOnDeckCache({ available: true, events, dismissed })
       } catch (err) {
         console.error('SeatGeek fetch error:', err)
         setOnDeckError(err.message)
@@ -174,6 +177,7 @@ export default function Upcoming() {
     try {
       const updated = await api.post('/dismissed-artists', { artist: event.artist })
       setDismissedArtists(new Set(updated))
+      writeOnDeckCache({ available: true, events: onDeckEvents, dismissed: updated })
     } catch (err) {
       alert('Failed to dismiss: ' + err.message)
     }
@@ -186,6 +190,7 @@ export default function Upcoming() {
         await api.delete(`/dismissed-artists/${encodeURIComponent(artist)}`)
       }
       setDismissedArtists(new Set())
+      writeOnDeckCache({ available: true, events: onDeckEvents, dismissed: [] })
     } catch (err) {
       alert('Failed: ' + err.message)
     }
