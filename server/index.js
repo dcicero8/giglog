@@ -339,7 +339,7 @@ app.get('/api/seatgeek/status', (req, res) => {
 app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
-  const cacheKey = 'seatgeek_la_concerts_6mo_v6';
+  const cacheKey = 'seatgeek_la_concerts_6mo_v7';
   const cached = await db.queryRow('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = $1', [cacheKey]);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
@@ -378,19 +378,29 @@ app.get('/api/seatgeek/events', async (req, res) => {
       ...(process.env.SEATGEEK_CLIENT_SECRET ? { 'client_secret': process.env.SEATGEEK_CLIENT_SECRET } : {}),
     };
 
-    // 1. General LA events feed (discovery) — paginate so a 6-month window isn't capped at the soonest 200
+    // 1. General LA events feed (discovery). SeatGeek caps per_page at 200 and sorts soonest-first,
+    // so a single query only covers the next few weeks. Query month-by-month instead so all 6
+    // months are represented evenly.
     const generalEvents = [];
-    for (let page = 1; page <= 3; page++) {
-      const generalParams = new URLSearchParams({ ...baseParams, 'per_page': '200', 'page': String(page) });
-      const generalRes = await fetch(`https://api.seatgeek.com/2/events?${generalParams}`);
-      if (!generalRes.ok) {
-        if (page === 1) throw new Error(`SeatGeek API returned ${generalRes.status}`);
-        break;
+    const seenGeneral = new Set();
+    for (let m = 0; m < 6; m++) {
+      const gteDate = m === 0 ? new Date() : (() => { const d = new Date(); d.setMonth(d.getMonth() + m); d.setDate(1); return d; })();
+      const lteDate = (() => { const d = new Date(); d.setMonth(d.getMonth() + m + 1); d.setDate(1); return d; })();
+      const monthParams = new URLSearchParams({
+        ...baseParams,
+        'datetime_local.gte': gteDate.toISOString().split('T')[0],
+        'datetime_local.lte': lteDate.toISOString().split('T')[0],
+        'per_page': '100',
+      });
+      const monthRes = await fetch(`https://api.seatgeek.com/2/events?${monthParams}`);
+      if (!monthRes.ok) {
+        if (m === 0) throw new Error(`SeatGeek API returned ${monthRes.status}`);
+        continue;
       }
-      const generalData = await generalRes.json();
-      const evs = generalData.events || [];
-      generalEvents.push(...evs.map(mapEvent));
-      if (evs.length < 200) break; // reached the end
+      const monthData = await monthRes.json();
+      for (const e of (monthData.events || [])) {
+        if (!seenGeneral.has(e.id)) { seenGeneral.add(e.id); generalEvents.push(mapEvent(e)); }
+      }
     }
 
     // 2. Targeted searches for wishlist + past concert artists (guarantees they appear)
