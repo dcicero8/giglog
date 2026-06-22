@@ -42,6 +42,20 @@ export default function Buddies() {
     }
   }
 
+  const removeBuddyDirect = async (userId) => {
+    if (!confirm('Remove this buddy? You will no longer see each other\'s data.')) return
+    setAddingId(userId)
+    try {
+      await api.post('/buddies/remove', { userId })
+      setBuddies(await api.get('/buddies'))
+      await loadAllUsers()
+    } catch (err) {
+      alert('Failed to remove buddy: ' + err.message)
+    } finally {
+      setAddingId(null)
+    }
+  }
+
   const createInvite = async () => {
     const { code } = await api.post('/buddies/invite')
     const link = `${window.location.origin}/invite/${code}`
@@ -162,7 +176,17 @@ export default function Buddies() {
                   <p className="text-xs text-text-muted truncate">{u.email}</p>
                 </div>
                 {u.is_buddy ? (
-                  <span className="text-xs text-success font-medium shrink-0">✓ Buddy</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-success font-medium">✓ Buddy</span>
+                    <button
+                      onClick={() => removeBuddyDirect(u.id)}
+                      disabled={addingId === u.id}
+                      title="Remove buddy"
+                      className="p-1 text-text-muted hover:text-accent transition-colors border-0 bg-transparent cursor-pointer disabled:opacity-50"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ) : (
                   <button
                     onClick={() => addBuddyDirect(u.id)}
