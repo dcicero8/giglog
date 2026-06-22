@@ -188,13 +188,33 @@ router.get('/search', async (req, res) => {
     if (cached) return res.json({ ...cached, cached: true });
 
     // Convert YYYY-MM-DD to dd-MM-yyyy for setlist.fm
-    let params = `artistName=${encodeURIComponent(artist)}`;
+    const artistOnly = `artistName=${encodeURIComponent(artist)}`;
+    let params = artistOnly;
     if (date) {
       const [y, m, d] = date.split('-');
       params += `&date=${d}-${m}-${y}`;
     }
 
-    const data = await fetchSetlistFm(`/search/setlists?${params}`);
+    let data;
+    try {
+      data = await fetchSetlistFm(`/search/setlists?${params}`);
+    } catch (err) {
+      // setlist.fm returns 404 when the artist has no setlist on that exact date —
+      // fall back to all of the artist's setlists so the user can still pick one.
+      if (date && /\b404\b/.test(err.message)) {
+        try {
+          data = await fetchSetlistFm(`/search/setlists?${artistOnly}`);
+        } catch (err2) {
+          if (/\b404\b/.test(err2.message)) data = { setlist: [] };
+          else throw err2;
+        }
+      } else if (/\b404\b/.test(err.message)) {
+        data = { setlist: [] };
+      } else {
+        throw err;
+      }
+    }
+
     await setCache(cacheKey, data, 24);
     res.json({ ...data, cached: false });
   } catch (err) {

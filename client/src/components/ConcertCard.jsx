@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import StarRating from './StarRating'
 import ClassicVenueBadge from './ClassicVenueBadge'
+import SetlistViewer from './SetlistViewer'
 import TicketArtSVG from './TicketArtSVG'
 import { EBAY_CATEGORIES, getEbayUrl, getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 import { api } from '../lib/api'
@@ -74,6 +75,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
     const t = setTimeout(() => setFlipSwapped(!!setlistOpen), 250)
     return () => clearTimeout(t)
   }, [setlistOpen])
+  const [findOpen, setFindOpen] = useState(false)
   const [ytForm, setYtForm] = useState(false)
   const [ytUrl, setYtUrl] = useState('')
   const [ytMatch, setYtMatch] = useState('exact')
@@ -86,6 +88,17 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
   const formattedDate = concert.date
     ? new Date(concert.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
     : ''
+
+  // Link a setlist.fm setlist to a concert that doesn't have one yet
+  const handleLinkSetlist = async (setlistId) => {
+    try {
+      await api.put(`/concerts/${concert.id}`, { setlist_fm_id: setlistId })
+      onUpdate?.({ ...concert, setlist_fm_id: setlistId })
+      setFindOpen(false)
+    } catch (err) {
+      alert('Failed to link setlist: ' + err.message)
+    }
+  }
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -300,7 +313,17 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
               >
                 {setlistOpen ? 'Hide Setlist' : 'View Setlist'}
               </button>
-            ) : null}
+            ) : (
+              <button
+                data-stop-card
+                onClick={() => setFindOpen(o => !o)}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors border-0 cursor-pointer shrink-0 ${
+                  findOpen ? 'bg-secondary/30 text-secondary ring-1 ring-secondary/40' : 'bg-secondary/10 text-secondary hover:bg-secondary/20'
+                }`}
+              >
+                {findOpen ? 'Close' : '🔍 Find Setlist'}
+              </button>
+            )}
           </div>
           <p className="text-sm text-text-muted mt-1 flex items-center gap-2 flex-wrap">
             <span>{[concert.venue, concert.city].filter(Boolean).join(' · ')}</span>
@@ -333,6 +356,13 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
 
       {concert.notes && (
         <p className="text-sm text-text-muted mb-3 line-clamp-2">{concert.notes}</p>
+      )}
+
+      {/* Find & link a setlist for concerts that don't have one yet */}
+      {findOpen && !concert.setlist_fm_id && (
+        <div data-stop-card className="mb-3 rounded-lg bg-bg-input border border-border p-3 max-h-[400px] overflow-y-auto">
+          <SetlistViewer concert={concert} onLink={handleLinkSetlist} />
+        </div>
       )}
 
       {/* Inline setlist for cards without ticket art (no flip available) */}
