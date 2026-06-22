@@ -226,14 +226,14 @@ router.get('/:buddyUserId/profile', async (req, res) => {
 
   // Fetch buddy's data
   const concerts = await db.queryRows(
-    'SELECT id, artist, venue, city, date, price, rating, last_minute, ticket_art_svg, ticket_image, poster_image, parent_concert_id, tour_name FROM concerts WHERE user_id = $1 AND parent_concert_id IS NULL ORDER BY date DESC',
+    'SELECT id, artist, venue, city, date, price, rating, last_minute, notes, setlist_fm_id, ticket_art_svg, ticket_image, poster_image, parent_concert_id, tour_name FROM concerts WHERE user_id = $1 AND parent_concert_id IS NULL ORDER BY date DESC',
     [buddyId]
   );
 
   // Attach children to festival parents
   for (const concert of concerts) {
     const children = await db.queryRows(
-      'SELECT id, artist, venue, city, date, rating, setlist_fm_id FROM concerts WHERE parent_concert_id = $1 ORDER BY display_order ASC',
+      'SELECT id, artist, venue, city, date, rating, setlist_fm_id, tour_name FROM concerts WHERE parent_concert_id = $1 ORDER BY display_order ASC',
       [concert.id]
     );
     if (children.length > 0) concert.children = children;

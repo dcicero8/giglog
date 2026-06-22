@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import InsightsView from '../components/InsightsView'
+import BuddyConcertCard from '../components/BuddyConcertCard'
 import { computeInsights } from '../lib/insights'
 
 export default function BuddyProfile() {
@@ -91,22 +92,13 @@ export default function BuddyProfile() {
       )}
 
       {tab === 'concerts' && (
-        <div className="space-y-2">
-          {concerts.length === 0 ? (
-            <p className="text-text-muted text-center py-8">No concerts yet</p>
-          ) : concerts.map(c => (
-            <div key={c.id} className="bg-surface border border-border rounded-lg px-4 py-3 flex items-center justify-between">
-              <div>
-                <span className="font-medium text-text">{c.artist}</span>
-                <span className="text-text-muted ml-2 text-sm">{c.venue}{c.city ? `, ${c.city}` : ''}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-text-muted">
-                {c.rating && <span className="text-yellow-400">{'★'.repeat(c.rating)}</span>}
-                {c.date && <span>{new Date(c.date + 'T00:00:00').toLocaleDateString()}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
+        concerts.length === 0 ? (
+          <p className="text-text-muted text-center py-8">No concerts yet</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {concerts.map(c => <BuddyConcertCard key={c.id} concert={c} />)}
+          </div>
+        )
       )}
 
       {tab === 'upcoming' && (
