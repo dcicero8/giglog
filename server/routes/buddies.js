@@ -57,6 +57,27 @@ router.post('/add', async (req, res) => {
   res.json({ success: true, buddy: target });
 });
 
+// Admin: remove a buddy by user id (bidirectional)
+router.post('/remove', async (req, res) => {
+  if (!(await isAdmin(req.userId))) return res.status(403).json({ error: 'Admin only' });
+  const buddyId = parseInt(req.body.userId);
+  if (!buddyId || buddyId === req.userId) return res.status(400).json({ error: 'Invalid user' });
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM buddies WHERE user_id = $1 AND buddy_id = $2', [req.userId, buddyId]);
+    await client.query('DELETE FROM buddies WHERE user_id = $1 AND buddy_id = $2', [buddyId, req.userId]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  res.json({ success: true });
+});
+
 // List my buddies
 router.get('/', async (req, res) => {
   const buddies = await db.queryRows(

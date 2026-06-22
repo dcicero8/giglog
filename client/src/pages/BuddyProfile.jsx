@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../lib/api'
+import InsightsView from '../components/InsightsView'
+import { computeInsights } from '../lib/insights'
 
 export default function BuddyProfile() {
   const { id } = useParams()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [tab, setTab] = useState('concerts')
+  const [tab, setTab] = useState('stats')
 
   useEffect(() => {
     api.get(`/buddies/${id}/profile`)
@@ -21,9 +23,11 @@ export default function BuddyProfile() {
   if (!profile) return <div className="text-text-muted">Buddy not found</div>
 
   const { buddy, stats, concerts, upcoming, wishlist } = profile
+  const insights = computeInsights(concerts)
 
   const tabs = [
-    { key: 'concerts', label: `Concerts (${stats.concertCount})` },
+    { key: 'stats', label: 'Stats' },
+    { key: 'concerts', label: `Concerts (${concerts.length})` },
     { key: 'upcoming', label: `Upcoming (${stats.upcomingCount})` },
     { key: 'wishlist', label: `Wishlist (${stats.wishlistCount})` },
   ]
@@ -52,7 +56,7 @@ export default function BuddyProfile() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Shows', value: stats.concertCount },
+          { label: 'Shows', value: insights.totalShows },
           { label: 'Upcoming', value: stats.upcomingCount },
           { label: 'Wishlist', value: stats.wishlistCount },
           { label: 'Total Spent', value: `$${Math.round(stats.totalSpent)}` },
@@ -82,6 +86,10 @@ export default function BuddyProfile() {
       </div>
 
       {/* Tab content */}
+      {tab === 'stats' && (
+        <InsightsView data={insights} links={false} />
+      )}
+
       {tab === 'concerts' && (
         <div className="space-y-2">
           {concerts.length === 0 ? (
