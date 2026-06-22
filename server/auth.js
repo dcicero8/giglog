@@ -86,23 +86,26 @@ export function setupAuth(app) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // Auth routes
+  // Only allow relative same-site paths as a post-login redirect (no open redirects)
+  const safeReturnTo = (val) =>
+    typeof val === 'string' && val.startsWith('/') && !val.startsWith('//') ? val : '';
+
+  // Auth routes. Carry returnTo through the OAuth `state` param rather than the session —
+  // Passport regenerates the session on login, which would wipe a session-stored returnTo
+  // (e.g. buddy invite links would never get accepted after sign-in).
   app.get('/auth/google', (req, res, next) => {
-    // Save returnTo so we can redirect after login (e.g. invite links)
-    if (req.query.returnTo) {
-      req.session.returnTo = req.query.returnTo;
-    }
-    next();
-  }, passport.authenticate('google', {
-    scope: ['profile', 'email'],
-  }));
+    const returnTo = safeReturnTo(req.query.returnTo);
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+      state: returnTo || undefined,
+    })(req, res, next);
+  });
 
   app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/login' }),
     (req, res) => {
-      const returnTo = req.session?.returnTo || '/';
-      if (req.session) delete req.session.returnTo;
-      console.log(`[auth] User logged in: ${req.user?.email} (id=${req.user?.id})`);
+      const returnTo = safeReturnTo(req.query.state) || '/';
+      console.log(`[auth] User logged in: ${req.user?.email} (id=${req.user?.id}) -> ${returnTo}`);
       res.redirect(returnTo);
     }
   );
