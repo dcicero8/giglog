@@ -8,6 +8,11 @@ export default function Buddies() {
   const [inviteLink, setInviteLink] = useState('')
   const [loading, setLoading] = useState(true)
   const [copying, setCopying] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [allUsers, setAllUsers] = useState([])
+  const [addingId, setAddingId] = useState(null)
+
+  const loadAllUsers = () => api.get('/buddies/all-users').then(setAllUsers).catch(() => {})
 
   useEffect(() => {
     Promise.all([
@@ -17,7 +22,25 @@ export default function Buddies() {
       setBuddies(b)
       setInvites(i)
     }).finally(() => setLoading(false))
+
+    api.get('/buddies/is-admin').then(({ admin }) => {
+      setIsAdmin(admin)
+      if (admin) loadAllUsers()
+    }).catch(() => {})
   }, [])
+
+  const addBuddyDirect = async (userId) => {
+    setAddingId(userId)
+    try {
+      await api.post('/buddies/add', { userId })
+      setBuddies(await api.get('/buddies'))
+      await loadAllUsers()
+    } catch (err) {
+      alert('Failed to add buddy: ' + err.message)
+    } finally {
+      setAddingId(null)
+    }
+  }
 
   const createInvite = async () => {
     const { code } = await api.post('/buddies/invite')
@@ -116,6 +139,42 @@ export default function Buddies() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Admin: member directory — add anyone directly */}
+      {isAdmin && allUsers.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-text mb-1">All Members</h2>
+          <p className="text-sm text-text-muted mb-3">As the admin, you can add anyone here directly — no invite needed.</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {allUsers.map(u => (
+              <div key={u.id} className="bg-surface border border-border rounded-xl p-4 flex items-center gap-3">
+                {u.avatar_url ? (
+                  <img src={u.avatar_url} alt="" className="w-10 h-10 rounded-full" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-secondary/20 flex items-center justify-center text-secondary font-bold">
+                    {u.name?.charAt(0) || '?'}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-text truncate">{u.name}</p>
+                  <p className="text-xs text-text-muted truncate">{u.email}</p>
+                </div>
+                {u.is_buddy ? (
+                  <span className="text-xs text-success font-medium shrink-0">✓ Buddy</span>
+                ) : (
+                  <button
+                    onClick={() => addBuddyDirect(u.id)}
+                    disabled={addingId === u.id}
+                    className="px-3 py-1.5 bg-accent/10 text-accent rounded-lg text-sm font-medium hover:bg-accent/20 transition-colors border-0 cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    {addingId === u.id ? 'Adding…' : '+ Add'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

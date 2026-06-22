@@ -4,6 +4,59 @@ import db from '../db.js';
 
 const router = Router();
 
+// The app owner/admin: ADMIN_EMAIL if set, otherwise the first registered user.
+async function isAdmin(userId) {
+  if (!userId) return false;
+  if (process.env.ADMIN_EMAIL) {
+    const u = await db.queryRow('SELECT email FROM users WHERE id = $1', [userId]);
+    return !!u && u.email?.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase();
+  }
+  const first = await db.queryRow('SELECT id FROM users ORDER BY id LIMIT 1');
+  return !!first && first.id === userId;
+}
+
+// Whether the current user is the admin (so the client can show the directory)
+router.get('/is-admin', async (req, res) => {
+  res.json({ admin: await isAdmin(req.userId) });
+});
+
+// Admin: list every member, flagged with whether they're already a buddy
+router.get('/all-users', async (req, res) => {
+  if (!(await isAdmin(req.userId))) return res.status(403).json({ error: 'Admin only' });
+  const users = await db.queryRows(
+    `SELECT u.id, u.name, u.email, u.avatar_url,
+       EXISTS(SELECT 1 FROM buddies b WHERE b.user_id = $1 AND b.buddy_id = u.id) AS is_buddy
+     FROM users u
+     WHERE u.id <> $1
+     ORDER BY u.name ASC`,
+    [req.userId]
+  );
+  res.json(users.map(u => ({ ...u, is_buddy: !!u.is_buddy })));
+});
+
+// Admin: add a member as a buddy directly (bidirectional, no invite needed)
+router.post('/add', async (req, res) => {
+  if (!(await isAdmin(req.userId))) return res.status(403).json({ error: 'Admin only' });
+  const buddyId = parseInt(req.body.userId);
+  if (!buddyId || buddyId === req.userId) return res.status(400).json({ error: 'Invalid user' });
+  const target = await db.queryRow('SELECT id, name, email, avatar_url FROM users WHERE id = $1', [buddyId]);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await client.query('INSERT INTO buddies (user_id, buddy_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.userId, buddyId]);
+    await client.query('INSERT INTO buddies (user_id, buddy_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [buddyId, req.userId]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  res.json({ success: true, buddy: target });
+});
+
 // List my buddies
 router.get('/', async (req, res) => {
   const buddies = await db.queryRows(
