@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import StarRating from './StarRating'
-import TopVenueBadge from './TopVenueBadge'
+import ClassicVenueBadge from './ClassicVenueBadge'
 import TicketArtSVG from './TicketArtSVG'
 import { EBAY_CATEGORIES, getEbayUrl, getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 import { api } from '../lib/api'
@@ -54,7 +54,7 @@ const YT_MATCH_ICONS = {
   tour: { dot: 'bg-[#facc15]', label: 'Same tour' },
 }
 
-export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, aiAvailable, onUpdate, setlistOpen, topVenue }) {
+export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, aiAvailable, onUpdate, setlistOpen, classicVenue }) {
   const [showEbay, setShowEbay] = useState(false)
   const [showYT, setShowYT] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -304,7 +304,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
           </div>
           <p className="text-sm text-text-muted mt-1 flex items-center gap-2 flex-wrap">
             <span>{[concert.venue, concert.city].filter(Boolean).join(' · ')}</span>
-            {topVenue && <TopVenueBadge />}
+            {classicVenue && <ClassicVenueBadge />}
           </p>
         </div>
         <div className="flex items-center gap-1 ml-2 shrink-0">

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import StarRating from '../components/StarRating'
-import TopVenueBadge from '../components/TopVenueBadge'
-import { getTopVenueNames } from '../lib/topVenues'
+import ClassicVenueBadge from '../components/ClassicVenueBadge'
+import { getClassicVenueNames } from '../lib/classicVenues'
 
 export default function Venues() {
   const { data, loading } = useApi('/venues')
@@ -25,8 +25,8 @@ export default function Venues() {
     }
   }
 
-  // Top 10 venues by rating — shared with the concert cards so the badge stays consistent
-  const topTen = getTopVenueNames(venues)
+  // 5-star venues earn a "Classic Venue" badge — shared with the concert cards
+  const classic = getClassicVenueNames(venues)
 
   const filtered = venues
     .filter(v => !search || v.venue.toLowerCase().includes(search.toLowerCase()) || (v.city || '').toLowerCase().includes(search.toLowerCase()))
@@ -94,7 +94,7 @@ export default function Venues() {
               <div className="flex-1 min-w-[200px]">
                 <h3 className="font-heading font-bold text-sm text-text flex items-center gap-2">
                   {v.venue}
-                  {topTen.has(v.venue) && <TopVenueBadge />}
+                  {classic.has(v.venue) && <ClassicVenueBadge />}
                 </h3>
                 <div className="flex items-center gap-3 mt-1 text-xs text-text-muted">
                   {v.city && <span>{v.city}</span>}

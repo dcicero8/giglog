@@ -3,9 +3,9 @@ import { api } from '../lib/api'
 import { getYouTubeExactShowUrl, getYouTubeFullSetsUrl, getSpotifyArtistUrl } from '../lib/resellers'
 import StarRating from './StarRating'
 import SetlistViewer from './SetlistViewer'
-import TopVenueBadge from './TopVenueBadge'
+import ClassicVenueBadge from './ClassicVenueBadge'
 
-export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onAddDay, onRefetch, topVenue }) {
+export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onAddDay, onRefetch, classicVenue }) {
   const [expanded, setExpanded] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [posterUploading, setPosterUploading] = useState(false)
@@ -356,7 +356,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             <h3 className="font-heading font-bold text-lg text-text">{concert.artist}</h3>
             <p className="text-sm text-text-muted mt-1 flex items-center gap-2 flex-wrap">
               <span>{[concert.venue, concert.city].filter(Boolean).join(' · ')}</span>
-              {topVenue && <TopVenueBadge />}
+              {classicVenue && <ClassicVenueBadge />}
             </p>
             {formattedDate && (
               <p className="text-sm text-text-muted mt-0.5">{formattedDate}</p>

@@ -339,7 +339,7 @@ app.get('/api/seatgeek/status', (req, res) => {
 app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
-  const cacheKey = 'seatgeek_la_concerts_6mo_v7';
+  const cacheKey = 'seatgeek_la_concerts_6mo_v8';
   const cached = await db.queryRow('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = $1', [cacheKey]);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
@@ -390,7 +390,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
         ...baseParams,
         'datetime_local.gte': gteDate.toISOString().split('T')[0],
         'datetime_local.lte': lteDate.toISOString().split('T')[0],
-        'per_page': '100',
+        'per_page': '200',
       });
       const monthRes = await fetch(`https://api.seatgeek.com/2/events?${monthParams}`);
       if (!monthRes.ok) {
