@@ -428,6 +428,7 @@ export default function Concerts() {
                     onAddDay={handleAddDay}
                     onRefetch={fetchConcerts}
                     classicVenue={classicVenueNames.has(concert.venue)}
+                    allBuddies={myBuddies || []}
                   />
                 ) : (
                   <ConcertCard

@@ -5,8 +5,9 @@ import StarRating from './StarRating'
 import SetlistViewer from './SetlistViewer'
 import ClassicVenueBadge from './ClassicVenueBadge'
 
-export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onAddDay, onRefetch, classicVenue }) {
+export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAvailable, onAddDay, onRefetch, classicVenue, allBuddies = [] }) {
   const [expanded, setExpanded] = useState(false)
+  const [tagOpen, setTagOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [posterUploading, setPosterUploading] = useState(false)
   const [reordering, setReordering] = useState(false)
@@ -196,6 +197,29 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
 
   const toggleBandSetlist = (child) => {
     setActiveBand(activeBand?.id === child.id ? null : child)
+  }
+
+  // "Went with" buddy tags (on the festival as a whole)
+  const taggedBuddies = concert.buddies || []
+  const availableToTag = (allBuddies || []).filter(b => !taggedBuddies.some(t => t.id === b.user_id))
+
+  const tagBuddy = async (buddyUserId) => {
+    try {
+      const updated = await api.post(`/concerts/${concert.id}/buddies`, { buddyUserId })
+      onUpdate?.({ ...concert, buddies: updated, children })
+      setTagOpen(false)
+    } catch (err) {
+      alert('Failed to tag buddy: ' + err.message)
+    }
+  }
+
+  const untagBuddy = async (buddyUserId) => {
+    try {
+      const updated = await api.delete(`/concerts/${concert.id}/buddies/${buddyUserId}`)
+      onUpdate?.({ ...concert, buddies: updated, children })
+    } catch (err) {
+      alert('Failed to remove tag: ' + err.message)
+    }
   }
 
   const formatDayHeader = (dateStr, dayNum) => {
@@ -389,6 +413,42 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
           <p className="text-sm text-text-muted mb-3 leading-relaxed">
             {children.map(c => c.artist).join(' · ')}
           </p>
+        )}
+
+        {/* Went with — tag buddies you attended with */}
+        {(taggedBuddies.length > 0 || availableToTag.length > 0) && (
+          <div className="mb-4 flex items-center gap-1.5 flex-wrap">
+            {taggedBuddies.length > 0 && <span className="text-xs text-text-dim">🧑‍🤝‍🧑 With</span>}
+            {taggedBuddies.map(b => (
+              <span key={b.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full bg-secondary/10 text-secondary">
+                {b.name}
+                <button onClick={() => untagBuddy(b.id)} title="Remove tag" className="hover:text-accent border-0 bg-transparent cursor-pointer p-0 leading-none">✕</button>
+              </span>
+            ))}
+            {availableToTag.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setTagOpen(o => !o)}
+                  className="px-2 py-0.5 text-[11px] rounded-full bg-bg-input text-text-muted hover:text-text border border-border cursor-pointer"
+                >
+                  + Tag buddy
+                </button>
+                {tagOpen && (
+                  <div className="absolute z-20 left-0 mt-1 bg-bg-card border border-border rounded-lg shadow-lg py-1 min-w-[160px] max-h-48 overflow-y-auto">
+                    {availableToTag.map(b => (
+                      <button
+                        key={b.user_id}
+                        onClick={() => tagBuddy(b.user_id)}
+                        className="block w-full text-left px-3 py-1.5 text-xs text-text hover:bg-bg-card-hover bg-transparent border-0 cursor-pointer"
+                      >
+                        {b.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Upload Ticket + Poster + Add Day buttons */}
