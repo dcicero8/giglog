@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useApi } from '../hooks/useApi'
 import StarRating from '../components/StarRating'
+import ArtistNetwork from '../components/ArtistNetwork'
 
 const FILTERS = [
   { key: 'seen', label: 'Seen', description: 'Bands I\'ve seen live' },
@@ -13,6 +14,7 @@ export default function Artists() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('seen')
   const [sortBy, setSortBy] = useState('shows')
+  const [view, setView] = useState('list') // 'list' | 'network'
 
   const filtered = (artists || [])
     .filter(a => {
@@ -39,11 +41,31 @@ export default function Artists() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-heading font-bold text-text">Artists</h1>
-        <span className="text-sm text-text-muted">
-          {filter === 'seen' ? `${seenCount} seen` : `${filtered.length} artist${filtered.length !== 1 ? 's' : ''}`}
-        </span>
+        <div className="flex items-center gap-3">
+          {view === 'list' && (
+            <span className="text-sm text-text-muted">
+              {filter === 'seen' ? `${seenCount} seen` : `${filtered.length} artist${filtered.length !== 1 ? 's' : ''}`}
+            </span>
+          )}
+          <div className="flex rounded-lg overflow-hidden border border-border">
+            {['list', 'network'].map(v => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 text-xs font-medium border-0 cursor-pointer transition-colors ${
+                  view === v ? 'bg-accent text-white' : 'bg-bg-input text-text-muted hover:text-text'
+                }`}
+              >
+                {v === 'list' ? 'List' : 'Network'}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
+      {view === 'network' && <ArtistNetwork />}
+
+      {view === 'list' && <>
       {/* Filters + Search */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
         {/* Filter tabs */}
@@ -141,6 +163,7 @@ export default function Artists() {
           ))}
         </div>
       )}
+      </>}
     </div>
   )
 }

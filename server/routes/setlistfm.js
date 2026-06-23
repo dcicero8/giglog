@@ -314,6 +314,7 @@ router.get('/festival/:id', async (req, res) => {
       tour: setlist.tour?.name || '',
       artists: allSetlists.map(s => ({
         artist: s.artist?.name || '',
+        missingArtist: !s.artist?.name,
         setlist_fm_id: s.id,
         setlist_fm_url: s.url || '',
         hasSongs: s.sets?.set?.some(set => set.song?.length > 0) || false,
@@ -386,6 +387,7 @@ router.get('/festival-page', async (req, res) => {
       if (!byDate.has(iso)) byDate.set(iso, []);
       byDate.get(iso).push({
         artist: setlist.artist?.name || '',
+        missingArtist: !setlist.artist?.name,
         setlist_fm_id: id,
         setlist_fm_url: setlist.url || `https://www.setlist.fm/setlist/${id}.html`,
         hasSongs: setlist.sets?.set?.some(s => s.song?.length > 0) || false,

@@ -18,13 +18,15 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
   const viewArtists = sortedSelDays.flatMap(i => days[i].artists.map(a => ({ ...a, _date: days[i].date })))
   const dayKey = sortedSelDays.join(',')
 
-  const [selected, setSelected] = useState(() => new Set(viewArtists.map((_, i) => i)))
+  // Default-select every act except ones setlist.fm gave us with no artist name —
+  // those are flagged so they aren't imported as blank rows by accident.
+  const [selected, setSelected] = useState(() => new Set(viewArtists.map((_, i) => i).filter(i => !viewArtists[i].missingArtist)))
   const [importing, setImporting] = useState(false)
 
-  // Reset artist selection to "all of the chosen days" whenever the day choice changes
+  // Reset artist selection whenever the day choice changes (still skipping flagged acts)
   useEffect(() => {
-    const count = sortedSelDays.reduce((n, i) => n + (days[i]?.artists.length || 0), 0)
-    setSelected(new Set(Array.from({ length: count }, (_, k) => k)))
+    const flat = sortedSelDays.flatMap(i => days[i]?.artists || [])
+    setSelected(new Set(flat.map((_, k) => k).filter(k => !flat[k].missingArtist)))
   }, [dayKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!data) return null
@@ -238,9 +240,12 @@ export default function FestivalImportModal({ data, onClose, onComplete, existin
                     className="accent-secondary shrink-0"
                   />
                   <span className="flex-1 text-sm text-text truncate">
-                    {artist.artist}
+                    {artist.artist || <span className="italic text-text-dim">Unknown artist</span>}
                     {artist.tour && <span className="text-text-dim text-xs ml-1.5">{artist.tour}</span>}
                   </span>
+                  {artist.missingArtist && (
+                    <span className="text-[10px] text-warning px-1.5 py-0.5 rounded-full bg-warning/10 shrink-0" title="setlist.fm returned no artist name for this act">⚠ no name</span>
+                  )}
                   {artist.hasSongs ? (
                     <span className="text-[10px] text-success px-1.5 py-0.5 rounded-full bg-success/10 shrink-0">setlist</span>
                   ) : (

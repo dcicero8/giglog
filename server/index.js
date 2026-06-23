@@ -16,6 +16,7 @@ import wishlistRouter from './routes/wishlist.js';
 import setlistfmRouter from './routes/setlistfm.js';
 import songsRouter from './routes/songs.js';
 import buddiesRouter from './routes/buddies.js';
+import artistsRouter from './routes/artists.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -96,6 +97,7 @@ app.use('/api/wishlist', wishlistRouter);
 app.use('/api/setlistfm', setlistfmRouter);
 app.use('/api/songs', songsRouter);
 app.use('/api/buddies', buddiesRouter);
+app.use('/api/artists', artistsRouter);
 
 // User scope helper — shows own data only (dev mode with null userId sees everything)
 const US = (n) => `($${n}::int IS NULL OR user_id = $${n})`;
