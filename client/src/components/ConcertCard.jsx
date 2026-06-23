@@ -55,7 +55,7 @@ const YT_MATCH_ICONS = {
   tour: { dot: 'bg-[#facc15]', label: 'Same tour' },
 }
 
-export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, aiAvailable, onUpdate, setlistOpen, classicVenue }) {
+export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, aiAvailable, onUpdate, setlistOpen, classicVenue, allBuddies = [] }) {
   const [showEbay, setShowEbay] = useState(false)
   const [showYT, setShowYT] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -76,6 +76,7 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
     return () => clearTimeout(t)
   }, [setlistOpen])
   const [findOpen, setFindOpen] = useState(false)
+  const [tagOpen, setTagOpen] = useState(false)
   const [ytForm, setYtForm] = useState(false)
   const [ytUrl, setYtUrl] = useState('')
   const [ytMatch, setYtMatch] = useState('exact')
@@ -88,6 +89,28 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
   const formattedDate = concert.date
     ? new Date(concert.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
     : ''
+
+  const taggedBuddies = concert.buddies || []
+  const availableToTag = (allBuddies || []).filter(b => !taggedBuddies.some(t => t.id === b.user_id))
+
+  const tagBuddy = async (buddyUserId) => {
+    try {
+      const updated = await api.post(`/concerts/${concert.id}/buddies`, { buddyUserId })
+      onUpdate?.({ ...concert, buddies: updated })
+      setTagOpen(false)
+    } catch (err) {
+      alert('Failed to tag buddy: ' + err.message)
+    }
+  }
+
+  const untagBuddy = async (buddyUserId) => {
+    try {
+      const updated = await api.delete(`/concerts/${concert.id}/buddies/${buddyUserId}`)
+      onUpdate?.({ ...concert, buddies: updated })
+    } catch (err) {
+      alert('Failed to remove tag: ' + err.message)
+    }
+  }
 
   // Link a setlist.fm setlist to a concert that doesn't have one yet
   const handleLinkSetlist = async (setlistId) => {
@@ -353,6 +376,42 @@ export default function ConcertCard({ concert, onEdit, onDelete, onViewSetlist, 
       <div className="mb-3 w-fit" data-stop-card>
         <StarRating rating={concert.rating || 0} onChange={handleRating} size="sm" />
       </div>
+
+      {/* Went with — tag buddies you attended with */}
+      {(taggedBuddies.length > 0 || availableToTag.length > 0) && (
+        <div className="mb-3 flex items-center gap-1.5 flex-wrap" data-stop-card>
+          {taggedBuddies.length > 0 && <span className="text-xs text-text-dim">🧑‍🤝‍🧑 With</span>}
+          {taggedBuddies.map(b => (
+            <span key={b.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full bg-secondary/10 text-secondary">
+              {b.name}
+              <button onClick={() => untagBuddy(b.id)} title="Remove tag" className="hover:text-accent border-0 bg-transparent cursor-pointer p-0 leading-none">✕</button>
+            </span>
+          ))}
+          {availableToTag.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setTagOpen(o => !o)}
+                className="px-2 py-0.5 text-[11px] rounded-full bg-bg-input text-text-muted hover:text-text border border-border cursor-pointer"
+              >
+                + Tag buddy
+              </button>
+              {tagOpen && (
+                <div className="absolute z-20 left-0 mt-1 bg-bg-card border border-border rounded-lg shadow-lg py-1 min-w-[160px] max-h-48 overflow-y-auto">
+                  {availableToTag.map(b => (
+                    <button
+                      key={b.user_id}
+                      onClick={() => tagBuddy(b.user_id)}
+                      className="block w-full text-left px-3 py-1.5 text-xs text-text hover:bg-bg-card-hover bg-transparent border-0 cursor-pointer"
+                    >
+                      {b.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {concert.notes && (
         <p className="text-sm text-text-muted mb-3 line-clamp-2">{concert.notes}</p>

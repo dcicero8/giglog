@@ -224,11 +224,19 @@ router.get('/:buddyUserId/profile', async (req, res) => {
   const buddy = await db.queryRow('SELECT id, name, email, avatar_url, created_at FROM users WHERE id = $1', [buddyId]);
   if (!buddy) return res.status(404).json({ error: 'User not found' });
 
-  // Fetch buddy's data
+  // Fetch buddy's data (notes are private — not shared with buddies)
   const concerts = await db.queryRows(
-    'SELECT id, artist, venue, city, date, price, rating, last_minute, notes, setlist_fm_id, ticket_art_svg, ticket_image, poster_image, parent_concert_id, tour_name FROM concerts WHERE user_id = $1 AND parent_concert_id IS NULL ORDER BY date DESC',
+    'SELECT id, artist, venue, city, date, price, rating, last_minute, setlist_fm_id, ticket_art_svg, ticket_image, poster_image, parent_concert_id, tour_name FROM concerts WHERE user_id = $1 AND parent_concert_id IS NULL ORDER BY date DESC',
     [buddyId]
   );
+
+  // Attach "went with" tags (buddy users tagged on each show)
+  for (const concert of concerts) {
+    concert.buddies = await db.queryRows(
+      `SELECT u.id, u.name FROM concert_buddies cb JOIN users u ON u.id = cb.buddy_user_id WHERE cb.concert_id = $1 ORDER BY u.name ASC`,
+      [concert.id]
+    );
+  }
 
   // Attach children to festival parents
   for (const concert of concerts) {

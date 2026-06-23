@@ -29,6 +29,7 @@ export default function Concerts() {
   const aiAvailable = aiStatus?.available ?? false
   const { data: venuesData } = useApi('/venues')
   const classicVenueNames = getClassicVenueNames(venuesData || [])
+  const { data: myBuddies } = useApi('/buddies')
   const { setlistUrl, setSetlistUrl, altSetlistUrl, setAltSetlistUrl, loading: setlistLoading, error: setlistError, setError: setSetlistError, importUrl, importFestival } = useSetlistImport()
   const [festivalData, setFestivalData] = useState(null)
   const [addDayFestivalId, setAddDayFestivalId] = useState(null) // festival ID to add a day to
@@ -438,6 +439,7 @@ export default function Concerts() {
                     onUpdate={(updated) => setConcerts(prev => prev.map(c => c.id === updated.id ? updated : c))}
                     setlistOpen={isSetlistOpen}
                     classicVenue={classicVenueNames.has(concert.venue)}
+                    allBuddies={myBuddies || []}
                   />
                 )}
               </div>

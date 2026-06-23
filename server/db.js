@@ -226,6 +226,12 @@ function initSQLite() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, venue TEXT NOT NULL, rating INTEGER, user_id INTEGER,
       updated_at TEXT DEFAULT (datetime('now')), UNIQUE(venue, user_id)
     );
+    CREATE TABLE IF NOT EXISTS concert_buddies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      concert_id INTEGER NOT NULL REFERENCES concerts(id) ON DELETE CASCADE,
+      buddy_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')), UNIQUE(concert_id, buddy_user_id)
+    );
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT, google_id TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL, name TEXT NOT NULL, avatar_url TEXT,

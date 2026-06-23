@@ -51,8 +51,9 @@ export default function BuddyConcertCard({ concert }) {
           <div className="mt-2"><StarRating rating={concert.rating} readonly size="sm" /></div>
         )}
 
-        {concert.notes && (
-          <p className="text-sm text-text-muted mt-2 whitespace-pre-line">{concert.notes}</p>
+        {/* Went-with tags */}
+        {concert.buddies && concert.buddies.length > 0 && (
+          <p className="text-xs text-secondary mt-2">🧑‍🤝‍🧑 Went with {concert.buddies.map(b => b.name).join(', ')}</p>
         )}
 
         {/* Solo setlist */}

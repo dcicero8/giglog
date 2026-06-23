@@ -115,6 +115,15 @@ CREATE TABLE IF NOT EXISTS venue_ratings (
   UNIQUE(venue, user_id)
 );
 
+-- "Went with" tags: buddy users tagged on a concert
+CREATE TABLE IF NOT EXISTS concert_buddies (
+  id SERIAL PRIMARY KEY,
+  concert_id INTEGER NOT NULL REFERENCES concerts(id) ON DELETE CASCADE,
+  buddy_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(concert_id, buddy_user_id)
+);
+
 -- ══ Auth & Multi-User ══
 
 CREATE TABLE IF NOT EXISTS users (

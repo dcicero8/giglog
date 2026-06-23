@@ -62,9 +62,47 @@ router.get('/', async (req, res) => {
     if (children.length > 0) {
       concert.children = children;
     }
+    // Attach "went with" buddy tags
+    concert.buddies = await db.queryRows(
+      'SELECT u.id, u.name FROM concert_buddies cb JOIN users u ON u.id = cb.buddy_user_id WHERE cb.concert_id = $1 ORDER BY u.name ASC',
+      [concert.id]
+    );
   }
 
   res.json(concerts);
+});
+
+// Tag a buddy as having attended a show with you
+router.post('/:id/buddies', async (req, res) => {
+  const concert = await db.queryRow(`SELECT id FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
+  if (!concert) return res.status(404).json({ error: 'Concert not found' });
+  const buddyUserId = parseInt(req.body.buddyUserId);
+  if (!buddyUserId) return res.status(400).json({ error: 'buddyUserId is required' });
+  // Must actually be your buddy
+  const isBuddy = await db.queryRow('SELECT id FROM buddies WHERE user_id = $1 AND buddy_id = $2', [req.userId, buddyUserId]);
+  if (!isBuddy) return res.status(400).json({ error: 'Not your buddy' });
+
+  await db.query(
+    'INSERT INTO concert_buddies (concert_id, buddy_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [concert.id, buddyUserId]
+  );
+  const buddies = await db.queryRows(
+    'SELECT u.id, u.name FROM concert_buddies cb JOIN users u ON u.id = cb.buddy_user_id WHERE cb.concert_id = $1 ORDER BY u.name ASC',
+    [concert.id]
+  );
+  res.json(buddies);
+});
+
+// Remove a buddy tag from a show
+router.delete('/:id/buddies/:buddyUserId', async (req, res) => {
+  const concert = await db.queryRow(`SELECT id FROM concerts WHERE id = $1 AND ${US(2)}`, [req.params.id, req.userId]);
+  if (!concert) return res.status(404).json({ error: 'Concert not found' });
+  await db.query('DELETE FROM concert_buddies WHERE concert_id = $1 AND buddy_user_id = $2', [concert.id, parseInt(req.params.buddyUserId)]);
+  const buddies = await db.queryRows(
+    'SELECT u.id, u.name FROM concert_buddies cb JOIN users u ON u.id = cb.buddy_user_id WHERE cb.concert_id = $1 ORDER BY u.name ASC',
+    [concert.id]
+  );
+  res.json(buddies);
 });
 
 // Get single concert (includes children if festival parent)
