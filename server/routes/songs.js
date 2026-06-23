@@ -64,9 +64,14 @@ router.get('/', async (req, res) => {
 
   const freqMap = {};
   for (const s of allSongs) {
-    const key = s.song.toLowerCase();
+    // Identify a song by title AND its canonical artist (the original writer for
+    // covers, otherwise the performer) so different songs that share a title —
+    // e.g. Beck's "Loser" vs the Grateful Dead's "Loser" — aren't merged, while
+    // covers of the same song still group together.
+    const canonical = (s.isCover && s.coverOf) ? s.coverOf : s.artist;
+    const key = `${s.song.toLowerCase().trim()}|${(canonical || '').toLowerCase().trim()}`;
     if (!freqMap[key]) {
-      freqMap[key] = { song: s.song, count: 0, concerts: [] };
+      freqMap[key] = { song: s.song, artist: canonical || '', count: 0, concerts: [] };
     }
     freqMap[key].count++;
     freqMap[key].concerts.push({

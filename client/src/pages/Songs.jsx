@@ -251,9 +251,9 @@ function FrequencySongRow({ entry, formatDate }) {
           {entry.song}
         </span>
 
-        {/* Artists summary */}
+        {/* Canonical artist (original writer for covers) */}
         <span className="text-xs text-text-dim truncate max-w-[200px] shrink-0">
-          {[...new Set(entry.concerts.map(c => c.artist))].join(', ')}
+          {entry.artist || [...new Set(entry.concerts.map(c => c.artist))].join(', ')}
         </span>
 
         {/* Expand indicator */}
