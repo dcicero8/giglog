@@ -173,6 +173,21 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
     }
   }
 
+  // Fix / set a band's artist name (e.g. when a setlist imported without one)
+  const handleRenameChild = async (child) => {
+    const next = window.prompt('Band / artist name:', child.artist || '')
+    if (next === null) return
+    const trimmed = next.trim()
+    if (!trimmed || trimmed === child.artist) return
+    try {
+      await api.put(`/concerts/${child.id}`, { artist: trimmed })
+      const updatedChildren = children.map(c => c.id === child.id ? { ...c, artist: trimmed } : c)
+      onUpdate?.({ ...concert, children: updatedChildren })
+    } catch (err) {
+      alert('Failed to rename: ' + err.message)
+    }
+  }
+
   // Pull a single band out of the festival — it becomes a standalone show (not deleted)
   const handleDetachChild = async (child) => {
     if (!window.confirm(`Pull ${child.artist} out of this festival? It becomes a separate show (nothing is deleted).`)) return
@@ -262,7 +277,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             }`}
             title={activeBand?.id === child.id ? 'Hide setlist' : child.setlist_fm_id ? 'View setlist' : 'Search for setlist'}
           >
-            {child.artist}
+            {child.artist || <span className="italic text-text-dim">Unknown artist</span>}
           </button>
           {child.tour_name && (
             <span className="text-[10px] text-text-dim/60 italic shrink-0 whitespace-nowrap">
@@ -309,9 +324,16 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             ♫
           </a>
           <button
+            onClick={() => handleRenameChild(child)}
+            className="px-1.5 py-0.5 text-[10px] rounded bg-white/5 text-text-muted hover:bg-white/10 hover:text-text transition-colors border-0 cursor-pointer"
+            title="Edit band / artist name"
+          >
+            ✎
+          </button>
+          <button
             onClick={() => handleDetachChild(child)}
             className="px-1.5 py-0.5 text-[10px] rounded bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors border-0 cursor-pointer"
-            title={`Pull ${child.artist} out into its own show (keeps it)`}
+            title={`Pull ${child.artist || 'this band'} out into its own show (keeps it)`}
           >
             ⤴
           </button>
