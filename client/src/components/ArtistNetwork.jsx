@@ -68,7 +68,11 @@ export default function ArtistNetwork() {
 
     const nodes = data.nodes
       .filter(n => !keep || keep.has(n.id))
-      .map(n => ({ id: n.id, name: n.name, count: n.count, r: 5 + Math.sqrt(n.count) * 3.2 }))
+      .map(n => {
+        const base = 5 + Math.sqrt(n.count) * 3.2
+        // Enlarge the focused artist so its play count reads inside the circle
+        return { id: n.id, name: n.name, count: n.count, r: (focused && n.id === focused) ? Math.max(base, 22) : base }
+      })
     const byId = new Map(nodes.map(n => [n.id, n]))
     const links = data.links
       .filter(l => byId.has(l.source) && byId.has(l.target))
@@ -147,10 +151,15 @@ export default function ArtistNetwork() {
         .on('end', (event, d) => { if (!event.active) sim.alphaTarget(0); if (!(focused && d.id === focused)) { d.fx = null; d.fy = null } }))
       .on('click', (event, d) => { event.stopPropagation(); if (focus?.id !== d.id) setFocus({ id: d.id, name: d.name }) })
       .on('mouseover', (event, d) => {
-        const friends = [...(fullAdj.get(d.id) || [])].map(id => data.nodes.find(n => n.id === id)).filter(Boolean)
-          .sort((a, b) => b.count - a.count)
-        const sharedShows = (focused && d.id !== focused) ? (egoRef.current[d.id]?.shows || []) : null
-        setTooltip({ x: event.clientX, y: event.clientY, name: d.name, count: d.count, friends: friends.map(f => f.name), sharedShows })
+        // The focused artist's name + count are shown inside its circle, so skip its tooltip
+        if (focused && d.id === focused) {
+          setTooltip(null)
+        } else {
+          const friends = [...(fullAdj.get(d.id) || [])].map(id => data.nodes.find(n => n.id === id)).filter(Boolean)
+            .sort((a, b) => b.count - a.count)
+          const sharedShows = focused ? (egoRef.current[d.id]?.shows || []) : null
+          setTooltip({ x: event.clientX, y: event.clientY, name: d.name, count: d.count, friends: friends.map(f => f.name), sharedShows })
+        }
         const nbr = adj.get(d.id) || new Set()
         link
           .style('stroke', l => (l.source.id === d.id || l.target.id === d.id) ? 'var(--color-secondary)' : 'var(--color-text-dim)')
@@ -183,6 +192,16 @@ export default function ArtistNetwork() {
       .style('font-weight', d => d.count >= labelThreshold ? 600 : 400)
       .style('pointer-events', 'none')
       .style('opacity', d => d.count >= labelThreshold ? 1 : 0)
+
+    // Play count printed inside the focused artist's (enlarged) circle
+    node.filter(d => d.id === focused).append('text')
+      .text(d => `${d.count}×`)
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .style('fill', '#fff')
+      .style('font-size', '12px')
+      .style('font-weight', 700)
+      .style('pointer-events', 'none')
 
     if (q) {
       node.style('opacity', n => n.name.toLowerCase().includes(q) ? 1 : 0.1)
