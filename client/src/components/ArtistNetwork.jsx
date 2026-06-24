@@ -250,7 +250,8 @@ export default function ArtistNetwork() {
           style={{ left: tooltip.x + 14, top: tooltip.y - 10 }}
         >
           <div className="font-semibold text-text">{tooltip.name} <span className="text-text-dim font-normal">· seen {tooltip.count}×</span></div>
-          {tooltip.friends.length > 0 && (
+          {/* In focus mode the neighbours are already shown as labelled nodes, so skip the redundant list */}
+          {!focus && tooltip.friends.length > 0 && (
             <div className="text-text-muted text-xs mt-1">
               with {tooltip.friends.slice(0, 12).join(', ')}{tooltip.friends.length > 12 ? ` +${tooltip.friends.length - 12} more` : ''}
             </div>
