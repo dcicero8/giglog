@@ -2,18 +2,18 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import * as d3 from 'd3'
 import { api } from '../lib/api'
 
-// Color a node by how many times the artist was seen (a frequency heat scale).
+// Color a node by how many times the artist was seen — a muted, "jewel-tone" heat scale.
 const FREQ_LEGEND = [
-  { label: '1×', color: '#fca5a5' },   // light red
-  { label: '2×', color: '#fde047' },   // light yellow
-  { label: '3–4×', color: '#3b82f6' }, // blue
-  { label: '5+×', color: '#22c55e' },  // green
+  { label: '1×', color: '#B5838D' },   // dusty rose
+  { label: '2×', color: '#C9A26B' },   // antique gold
+  { label: '3–4×', color: '#5C80A8' }, // slate blue
+  { label: '5+×', color: '#4A8C6F' },  // deep emerald
 ]
 const nodeColor = (count) => {
-  if (count >= 5) return '#22c55e'  // green
-  if (count >= 3) return '#3b82f6'  // blue (3–4)
-  if (count === 2) return '#fde047' // light yellow
-  return '#fca5a5'                  // light red (1)
+  if (count >= 5) return '#4A8C6F'  // deep emerald
+  if (count >= 3) return '#5C80A8'  // slate blue (3–4)
+  if (count === 2) return '#C9A26B' // antique gold
+  return '#B5838D'                  // dusty rose (1)
 }
 
 // Force-directed "constellation" of artists, built with d3-force (same approach as the
