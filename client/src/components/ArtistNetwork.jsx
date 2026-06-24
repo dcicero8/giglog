@@ -21,6 +21,7 @@ export default function ArtistNetwork() {
 
   const svgRef = useRef(null)
   const simRef = useRef(null)
+  const egoRef = useRef({}) // neighborId -> [{label, date}] for the focused artist
 
   useEffect(() => {
     let alive = true
@@ -29,6 +30,17 @@ export default function ArtistNetwork() {
       .catch(e => { if (alive) { setError(e.message); setLoading(false) } })
     return () => { alive = false }
   }, [])
+
+  // When drilling into an artist, fetch which show(s) connect them to each neighbour.
+  useEffect(() => {
+    if (!focus?.id) { egoRef.current = {}; return }
+    let alive = true
+    egoRef.current = {}
+    api.get(`/artists/ego?key=${encodeURIComponent(focus.id)}`)
+      .then(d => { if (alive) egoRef.current = d.neighbors || {} })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [focus?.id])
 
   const buildGraph = useCallback(() => {
     if (!svgRef.current || !data?.nodes?.length) return
@@ -137,7 +149,8 @@ export default function ArtistNetwork() {
       .on('mouseover', (event, d) => {
         const friends = [...(fullAdj.get(d.id) || [])].map(id => data.nodes.find(n => n.id === id)).filter(Boolean)
           .sort((a, b) => b.count - a.count)
-        setTooltip({ x: event.clientX, y: event.clientY, name: d.name, count: d.count, friends: friends.map(f => f.name) })
+        const sharedShows = (focused && d.id !== focused) ? (egoRef.current[d.id]?.shows || []) : null
+        setTooltip({ x: event.clientX, y: event.clientY, name: d.name, count: d.count, friends: friends.map(f => f.name), sharedShows })
         const nbr = adj.get(d.id) || new Set()
         link
           .style('stroke', l => (l.source.id === d.id || l.target.id === d.id) ? 'var(--color-secondary)' : 'var(--color-text-dim)')
@@ -250,7 +263,18 @@ export default function ArtistNetwork() {
           style={{ left: tooltip.x + 14, top: tooltip.y - 10 }}
         >
           <div className="font-semibold text-text">{tooltip.name} <span className="text-text-dim font-normal">· seen {tooltip.count}×</span></div>
-          {/* In focus mode the neighbours are already shown as labelled nodes, so skip the redundant list */}
+          {/* Focus mode: show the actual show(s) that connect this neighbour to the focused artist */}
+          {focus && tooltip.sharedShows && (
+            <div className="text-text-muted text-xs mt-1">
+              {tooltip.sharedShows.length === 0
+                ? 'shared show'
+                : <>together at {tooltip.sharedShows.map((s, i) => (
+                    <span key={i}>{i > 0 ? '; ' : ''}<span className="text-text">{s.label}</span>{s.date ? ` (${new Date(s.date + 'T00:00:00').getFullYear()})` : ''}</span>
+                  ))}</>
+              }
+            </div>
+          )}
+          {/* Overview mode: list the artists they shared bills with */}
           {!focus && tooltip.friends.length > 0 && (
             <div className="text-text-muted text-xs mt-1">
               with {tooltip.friends.slice(0, 12).join(', ')}{tooltip.friends.length > 12 ? ` +${tooltip.friends.length - 12} more` : ''}

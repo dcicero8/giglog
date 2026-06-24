@@ -74,4 +74,56 @@ router.get('/network', async (req, res) => {
   res.json({ nodes: nodeList, links, blankActs });
 });
 
+// GET /api/artists/ego?key=<normalized artist name> — for one artist, list each
+// artist they shared a show with AND which show(s) connected them. Used by the
+// network graph's drill-in view so hovering a neighbour shows the actual shared bill.
+router.get('/ego', async (req, res) => {
+  const uid = req.userId;
+  const key = (req.query.key || '').toLowerCase().trim();
+  if (!key) return res.json({ neighbors: {} });
+
+  // Each attended act + its festival parent's name (for a readable show label).
+  const rows = await db.queryRows(
+    `SELECT c.id, c.artist, c.venue, c.date, c.parent_concert_id, p.artist AS parent_name
+     FROM concerts c
+     LEFT JOIN concerts p ON p.id = c.parent_concert_id
+     WHERE ($1::int IS NULL OR c.user_id = $1) AND c.id NOT IN (${FESTIVAL_PARENT_IDS(1)})`,
+    [uid]
+  );
+
+  // Group acts into shows
+  const shows = new Map(); // showKey -> { label, date, acts: [{key, name}] }
+  for (const r of rows) {
+    const name = (r.artist || '').trim();
+    if (!name) continue;
+    const showKey = r.parent_concert_id != null
+      ? `p${r.parent_concert_id}`
+      : `s|${r.date || ''}|${(r.venue || '').toLowerCase().trim()}`;
+    if (!shows.has(showKey)) {
+      const label = r.parent_name?.trim() || r.venue?.trim() || 'Show';
+      shows.set(showKey, { label, date: r.date || '', acts: [] });
+    }
+    shows.get(showKey).acts.push({ key: name.toLowerCase(), name });
+  }
+
+  // For every show the focused artist played, record the shared show for each co-act.
+  const neighbors = {}; // neighborKey -> { name, shows: [{label, date}] }
+  for (const show of shows.values()) {
+    if (!show.acts.some(a => a.key === key)) continue;
+    for (const a of show.acts) {
+      if (a.key === key) continue;
+      if (!neighbors[a.key]) neighbors[a.key] = { name: a.name, shows: [] };
+      neighbors[a.key].shows.push({ label: show.label, date: show.date });
+    }
+  }
+  // De-dupe identical (label+date) entries per neighbour
+  for (const n of Object.values(neighbors)) {
+    const seen = new Set();
+    n.shows = n.shows.filter(s => { const k = s.label + '|' + s.date; if (seen.has(k)) return false; seen.add(k); return true; })
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  }
+
+  res.json({ neighbors });
+});
+
 export default router;
