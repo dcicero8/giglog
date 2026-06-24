@@ -2,6 +2,10 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import * as d3 from 'd3'
 import { api } from '../lib/api'
 
+// Color a node by how many times the artist was seen.
+const FREQUENT_BLUE = '#3b82f6'
+const nodeColor = (count) => (count === 3 || count === 4) ? FREQUENT_BLUE : 'var(--color-accent)'
+
 // Force-directed "constellation" of artists, built with d3-force (same approach as the
 // SocialMedia_Mapper network graph): D3 owns the simulation and mutates the SVG directly
 // on each tick, so React never re-renders the thousands of elements per frame. Each circle
@@ -123,9 +127,9 @@ export default function ArtistNetwork() {
 
     node.append('circle')
       .attr('r', d => d.r)
-      .style('fill', 'var(--color-accent)')
+      .style('fill', d => nodeColor(d.count))
       .style('fill-opacity', 0.85)
-      .style('stroke', 'var(--color-accent)')
+      .style('stroke', d => nodeColor(d.count))
       .style('stroke-opacity', 0.4)
       .style('stroke-width', 0.5)
 
