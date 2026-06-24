@@ -24,10 +24,11 @@ router.get('/network', async (req, res) => {
   const nodes = new Map(); // key -> { name, count, spellings: Map }
   // Group acts by "show" so we can connect everyone who shared one.
   const shows = new Map(); // showKey -> Set of artist keys
+  let blankActs = 0; // acts with no artist name at all
 
   for (const r of rows) {
     const name = (r.artist || '').trim();
-    if (!name) continue;
+    if (!name) { blankActs++; continue; }
     const key = name.toLowerCase();
 
     let node = nodes.get(key);
@@ -70,7 +71,7 @@ router.get('/network', async (req, res) => {
     return { source, target, weight };
   });
 
-  res.json({ nodes: nodeList, links });
+  res.json({ nodes: nodeList, links, blankActs });
 });
 
 export default router;
