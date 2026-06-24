@@ -341,7 +341,7 @@ app.get('/api/seatgeek/status', (req, res) => {
 app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
-  const cacheKey = 'seatgeek_la_concerts_6mo_v8';
+  const cacheKey = 'seatgeek_la_concerts_12mo_50mi_v9';
   const cached = await db.queryRow('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = $1', [cacheKey]);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
@@ -366,12 +366,12 @@ app.get('/api/seatgeek/events', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const futureDate = new Date();
-    futureDate.setMonth(futureDate.getMonth() + 6); // next 6 months
+    futureDate.setMonth(futureDate.getMonth() + 12); // next 12 months
     const future = futureDate.toISOString().split('T')[0];
     const baseParams = {
       'lat': '34.0522',
       'lon': '-118.2437',
-      'range': '30mi',
+      'range': '50mi',
       'taxonomies.name': 'concert',
       'datetime_local.gte': today,
       'datetime_local.lte': future,
@@ -385,7 +385,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
     // months are represented evenly.
     const generalEvents = [];
     const seenGeneral = new Set();
-    for (let m = 0; m < 6; m++) {
+    for (let m = 0; m < 12; m++) {
       const gteDate = m === 0 ? new Date() : (() => { const d = new Date(); d.setMonth(d.getMonth() + m); d.setDate(1); return d; })();
       const lteDate = (() => { const d = new Date(); d.setMonth(d.getMonth() + m + 1); d.setDate(1); return d; })();
       const monthParams = new URLSearchParams({
@@ -601,12 +601,14 @@ Return ONLY the JSON, no markdown, no explanation.`,
 // Distinct artist names from past concerts (for On Deck "Seen Before" matching)
 app.get('/api/past-artists', async (req, res) => {
   const rows = await db.queryRows(
-    `SELECT DISTINCT artist FROM concerts
+    `SELECT artist, COUNT(*) AS count FROM concerts
      WHERE ${NOT_FESTIVAL_PARENT(1)}
-     AND ${US(1)}`,
+     AND ${US(1)}
+     GROUP BY artist`,
     [req.userId]
   );
-  res.json(rows.map(r => r.artist));
+  // Objects carry the seen-count; older callers can still read .artist
+  res.json(rows.map(r => ({ artist: r.artist, count: Number(r.count) })));
 });
 
 // Ticket art generation (programmatic SVG — no AI needed)

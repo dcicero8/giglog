@@ -327,7 +327,7 @@ export default function Upcoming() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider flex items-center gap-2">
                 <span className="text-warning">🎯</span> On Deck
-                <span className="text-text-dim font-normal normal-case tracking-normal">· LA Area · Next 6 Months</span>
+                <span className="text-text-dim font-normal normal-case tracking-normal">· LA Area · Next 12 Months</span>
               </h2>
               <div className="flex items-center gap-3">
                 {dismissedArtists.size > 0 && (
@@ -363,7 +363,7 @@ export default function Upcoming() {
                 <p className="text-text-muted text-sm">
                   {dismissedArtists.size > 0
                     ? `All events hidden · ${dismissedArtists.size} artist${dismissedArtists.size !== 1 ? 's' : ''} dismissed`
-                    : 'No concerts found in the LA area for the next 60 days'
+                    : 'No concerts found in the LA area for the next 12 months'
                   }
                 </p>
               </div>
@@ -377,6 +377,7 @@ export default function Upcoming() {
                     onDismiss={handleDismiss}
                     isWishlist={isWishlistMatch(event.artist)}
                     isPastArtist={isPastArtistMatch(event.artist)}
+                    seenCount={matchers.seenCount(event.artist)}
                   />
                 ))}
               </div>

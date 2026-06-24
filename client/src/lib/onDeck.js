@@ -11,12 +11,22 @@ export function normalizeArtist(s) {
 }
 
 // Build exact-match predicates from the user's past artists + wishlist.
+// pastArtists may be plain name strings or { artist, count } objects.
 export function onDeckMatchers(pastArtists, wishlist) {
-  const past = new Set((pastArtists || []).map(normalizeArtist).filter(Boolean))
+  // Sum seen-counts per normalized name (so different spellings merge)
+  const pastCount = new Map()
+  for (const p of (pastArtists || [])) {
+    const name = typeof p === 'string' ? p : p.artist
+    const count = typeof p === 'string' ? 1 : (p.count || 1)
+    const key = normalizeArtist(name)
+    if (!key) continue
+    pastCount.set(key, (pastCount.get(key) || 0) + count)
+  }
   const wish = new Set((wishlist || []).map(w => normalizeArtist(w.artist || w)).filter(Boolean))
   return {
     isWishlist: (name) => wish.has(normalizeArtist(name)),
-    isPast: (name) => past.has(normalizeArtist(name)),
+    isPast: (name) => pastCount.has(normalizeArtist(name)),
+    seenCount: (name) => pastCount.get(normalizeArtist(name)) || 0,
   }
 }
 

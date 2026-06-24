@@ -1,4 +1,5 @@
-export default function OnDeckCard({ event, onSave, onDismiss, isWishlist, isPastArtist }) {
+export default function OnDeckCard({ event, onSave, onDismiss, isWishlist, isPastArtist, seenCount = 0 }) {
+  const seenMultiple = seenCount > 1
   const formattedDate = event.date
     ? new Date(event.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     : ''
@@ -40,9 +41,15 @@ export default function OnDeckCard({ event, onSave, onDismiss, isWishlist, isPas
           </span>
         )}
         {!isWishlist && isPastArtist && (
-          <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-secondary/15 text-secondary mb-2">
-            ↻ Seen Before
-          </span>
+          seenMultiple ? (
+            <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-secondary/30 text-secondary ring-1 ring-secondary/40 mb-2">
+              ★ Seen {seenCount}×
+            </span>
+          ) : (
+            <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-secondary/15 text-secondary mb-2">
+              ↻ Seen Before
+            </span>
+          )
         )}
         <div className="flex items-start justify-between gap-1">
           <h3 className="font-heading font-bold text-sm text-text truncate mb-1">{event.artist}</h3>
