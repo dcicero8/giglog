@@ -272,7 +272,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
         <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
           <button
             onClick={() => toggleBandSetlist(child)}
-            className={`text-left text-sm transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium ${
+            className={`text-left text-sm transition-colors bg-transparent border-0 cursor-pointer p-0 truncate font-medium shrink-0 max-w-[70%] ${
               activeBand?.id === child.id ? 'text-accent' : 'text-text hover:text-accent'
             }`}
             title={activeBand?.id === child.id ? 'Hide setlist' : child.setlist_fm_id ? 'View setlist' : 'Search for setlist'}
@@ -280,7 +280,7 @@ export default function FestivalCard({ concert, onEdit, onDelete, onUpdate, aiAv
             {child.artist || <span className="italic text-text-dim">Unknown artist</span>}
           </button>
           {child.tour_name && (
-            <span className="text-[10px] text-text-dim/60 italic shrink-0 whitespace-nowrap">
+            <span className="text-[10px] text-text-dim/60 italic truncate min-w-0" title={child.tour_name}>
               {child.tour_name}
             </span>
           )}
