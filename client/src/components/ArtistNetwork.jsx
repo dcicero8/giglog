@@ -1,23 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import * as d3 from 'd3'
 import { api } from '../lib/api'
 
-// Force-directed "constellation" of artists, drawn on a <canvas> so it stays smooth
-// with hundreds of nodes and thousands of edges. Each circle is an artist sized by how
-// many times you've seen them; lines connect artists who shared a show or festival.
+// Force-directed "constellation" of artists, built with d3-force (same approach as the
+// SocialMedia_Mapper network graph): D3 owns the simulation and mutates the SVG directly
+// on each tick, so React never re-renders the thousands of elements per frame. Each circle
+// is an artist sized by how many times you've seen them; lines connect artists who shared
+// a show or festival.
 export default function ArtistNetwork() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [info, setInfo] = useState(null) // caption for the hovered artist
+  const [tooltip, setTooltip] = useState(null)
+  const [search, setSearch] = useState('')
 
-  const wrapRef = useRef(null)
-  const canvasRef = useRef(null)
-  const stateRef = useRef(null) // { nodes, links, adjacency }
-  const viewRef = useRef({ scale: 1, cx: 0, cy: 0, w: 0, h: 0 })
-  const hoverRef = useRef(null)
-  const dragRef = useRef(null)
-  const rafRef = useRef(null)
-  const alphaRef = useRef(0)
+  const svgRef = useRef(null)
+  const simRef = useRef(null)
 
   useEffect(() => {
     let alive = true
@@ -27,266 +25,151 @@ export default function ArtistNetwork() {
     return () => { alive = false }
   }, [])
 
-  const radius = (count) => 4 + Math.sqrt(count) * 3.2
+  const buildGraph = useCallback(() => {
+    if (!svgRef.current || !data?.nodes?.length) return
 
-  // Build the simulation + run the canvas render loop.
-  useEffect(() => {
-    if (!data || !data.nodes.length || !canvasRef.current) return
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
+    const svg = d3.select(svgRef.current)
+    svg.selectAll('*').remove()
 
-    const N = data.nodes.length
-    const nodes = data.nodes.map((n, i) => {
-      const a = (i / N) * Math.PI * 2
-      const rr = 200 + (i % 7) * 22
-      return { ...n, r: radius(n.count), x: Math.cos(a) * rr, y: Math.sin(a) * rr, vx: 0, vy: 0 }
-    })
+    const width = svgRef.current.clientWidth || 900
+    const height = svgRef.current.clientHeight || 700
+
+    const q = search.toLowerCase().trim()
+
+    // Nodes (clone so d3 can attach x/y/vx/vy without mutating state)
+    const nodes = data.nodes.map(n => ({
+      id: n.id,
+      name: n.name,
+      count: n.count,
+      r: 5 + Math.sqrt(n.count) * 3.2,
+    }))
     const byId = new Map(nodes.map(n => [n.id, n]))
     const links = data.links
-      .map(l => ({ s: byId.get(l.source), t: byId.get(l.target), weight: l.weight }))
-      .filter(l => l.s && l.t)
-    const adjacency = new Map()
+      .filter(l => byId.has(l.source) && byId.has(l.target))
+      .map(l => ({ source: l.source, target: l.target, weight: l.weight }))
+
+    // Adjacency for hover highlighting
+    const adj = new Map()
     for (const l of links) {
-      if (!adjacency.has(l.s.id)) adjacency.set(l.s.id, new Set())
-      if (!adjacency.has(l.t.id)) adjacency.set(l.t.id, new Set())
-      adjacency.get(l.s.id).add(l.t.id)
-      adjacency.get(l.t.id).add(l.s.id)
-    }
-    stateRef.current = { nodes, links, adjacency }
-
-    // Label only the most-seen artists (plus hovered + neighbors at draw time).
-    const labelThreshold = [...nodes].sort((a, b) => b.count - a.count)[Math.min(30, N - 1)]?.count || 2
-
-    const REP = 1100      // repulsion strength
-    const CUT2 = 320 * 320 // ignore repulsion beyond this (perf + stability)
-    const MAXV = 40
-
-    const step = () => {
-      const a = alphaRef.current
-      for (let i = 0; i < N; i++) {
-        const p = nodes[i]
-        for (let j = i + 1; j < N; j++) {
-          const q = nodes[j]
-          let dx = p.x - q.x, dy = p.y - q.y
-          let d2 = dx * dx + dy * dy
-          if (d2 > CUT2 || d2 === 0) { if (d2 === 0) { dx = Math.random(); dy = Math.random(); d2 = 1 } else continue }
-          const d = Math.sqrt(d2)
-          let f = REP / d2
-          const minD = p.r + q.r + 6
-          if (d < minD) f += (minD - d) * 0.6
-          const ux = dx / d, uy = dy / d
-          p.vx += ux * f; p.vy += uy * f
-          q.vx -= ux * f; q.vy -= uy * f
-        }
-      }
-      for (const l of links) {
-        const dx = l.t.x - l.s.x, dy = l.t.y - l.s.y
-        const d = Math.sqrt(dx * dx + dy * dy) || 0.01
-        const ideal = l.s.r + l.t.r + 30
-        const f = (d - ideal) * 0.0015 * Math.min(l.weight, 5)
-        const ux = dx / d, uy = dy / d
-        l.s.vx += ux * f; l.s.vy += uy * f
-        l.t.vx -= ux * f; l.t.vy -= uy * f
-      }
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-      for (const n of nodes) {
-        n.vx += -n.x * 0.02
-        n.vy += -n.y * 0.02
-        n.vx *= 0.86; n.vy *= 0.86
-        // clamp + NaN guard
-        if (!Number.isFinite(n.vx)) n.vx = 0
-        if (!Number.isFinite(n.vy)) n.vy = 0
-        n.vx = Math.max(-MAXV, Math.min(MAXV, n.vx))
-        n.vy = Math.max(-MAXV, Math.min(MAXV, n.vy))
-        if (n !== dragRef.current) { n.x += n.vx * a; n.y += n.vy * a }
-        if (!Number.isFinite(n.x)) n.x = 0
-        if (!Number.isFinite(n.y)) n.y = 0
-        minX = Math.min(minX, n.x - n.r); minY = Math.min(minY, n.y - n.r)
-        maxX = Math.max(maxX, n.x + n.r); maxY = Math.max(maxY, n.y + n.r)
-      }
-      // fit-to-view transform
-      const pad = 30
-      const cw = viewRef.current.w, ch = viewRef.current.h
-      const worldW = (maxX - minX) + pad * 2, worldH = (maxY - minY) + pad * 2
-      const scale = Math.min(cw / worldW, ch / worldH) || 1
-      viewRef.current.scale = scale
-      viewRef.current.cx = (minX + maxX) / 2
-      viewRef.current.cy = (minY + maxY) / 2
+      if (!adj.has(l.source)) adj.set(l.source, new Set())
+      if (!adj.has(l.target)) adj.set(l.target, new Set())
+      adj.get(l.source).add(l.target)
+      adj.get(l.target).add(l.source)
     }
 
-    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || '#888'
-    const draw = () => {
-      const dpr = window.devicePixelRatio || 1
-      const cw = viewRef.current.w, ch = viewRef.current.h
-      const { scale, cx, cy } = viewRef.current
-      const sx = (x) => (x - cx) * scale + cw / 2
-      const sy = (y) => (y - cy) * scale + ch / 2
+    // Label only the most-seen artists by default (hover reveals the rest)
+    const sortedCounts = nodes.map(n => n.count).sort((a, b) => b - a)
+    const labelThreshold = sortedCounts[Math.min(30, sortedCounts.length - 1)] || 2
 
-      ctx.save()
-      ctx.scale(dpr, dpr)
-      ctx.clearRect(0, 0, cw, ch)
+    if (simRef.current) simRef.current.stop()
 
-      const hovered = hoverRef.current
-      const lit = hovered ? adjacency.get(hovered) || new Set() : null
-      const accent = css('--color-accent') || '#ff3c64'
-      const sec = css('--color-secondary') || '#4ade80'
-      const dim = css('--color-text-dim') || '#9ca3af'
-      const textc = css('--color-text') || '#e5e7eb'
+    const sim = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.id)
+        .distance(d => 36 + d.source.r + d.target.r)
+        .strength(d => Math.min(0.04 + d.weight * 0.04, 0.5)))
+      .force('charge', d3.forceManyBody().strength(d => -40 - d.r * 4).distanceMax(420))
+      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.06))
+      .force('collide', d3.forceCollide(d => d.r + 3))
+      .force('x', d3.forceX(width / 2).strength(0.03))
+      .force('y', d3.forceY(height / 2).strength(0.03))
 
-      // edges
-      ctx.lineWidth = 1
-      if (!hovered) {
-        ctx.strokeStyle = dim
-        ctx.globalAlpha = 0.06
-        ctx.beginPath()
-        for (const l of links) { ctx.moveTo(sx(l.s.x), sy(l.s.y)); ctx.lineTo(sx(l.t.x), sy(l.t.y)) }
-        ctx.stroke()
-      } else {
-        ctx.strokeStyle = dim; ctx.globalAlpha = 0.03
-        ctx.beginPath()
-        for (const l of links) { ctx.moveTo(sx(l.s.x), sy(l.s.y)); ctx.lineTo(sx(l.t.x), sy(l.t.y)) }
-        ctx.stroke()
-        ctx.strokeStyle = sec
-        for (const l of links) {
-          if (l.s.id !== hovered && l.t.id !== hovered) continue
-          ctx.globalAlpha = Math.min(0.25 + l.weight * 0.15, 0.85)
-          ctx.lineWidth = Math.min(0.8 + l.weight * 0.5, 3)
-          ctx.beginPath(); ctx.moveTo(sx(l.s.x), sy(l.s.y)); ctx.lineTo(sx(l.t.x), sy(l.t.y)); ctx.stroke()
-        }
-      }
+    simRef.current = sim
 
-      // nodes
-      for (const n of nodes) {
-        const on = !hovered || n.id === hovered || (lit && lit.has(n.id))
-        ctx.globalAlpha = on ? 0.9 : 0.18
-        ctx.fillStyle = accent
-        ctx.beginPath(); ctx.arc(sx(n.x), sy(n.y), Math.max(n.r * scale, 1.5), 0, Math.PI * 2); ctx.fill()
-      }
+    const g = svg.append('g')
 
-      // labels
-      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
-      for (const n of nodes) {
-        const neighbor = lit && lit.has(n.id)
-        const show = n.count >= labelThreshold || n.id === hovered || neighbor
-        if (!show) continue
-        const big = n.count >= labelThreshold
-        ctx.globalAlpha = (!hovered || n.id === hovered || neighbor) ? 1 : 0.25
-        ctx.fillStyle = (n.id === hovered) ? accent : textc
-        ctx.font = `${n.id === hovered ? '600 ' : big ? '600 ' : ''}${Math.max(10, Math.min(n.r * scale + 4, 15))}px Inter, system-ui, sans-serif`
-        ctx.fillText(n.name, sx(n.x), sy(n.y) - Math.max(n.r * scale, 1.5) - 2)
-      }
-      ctx.globalAlpha = 1
-      ctx.restore()
+    svg.call(d3.zoom().scaleExtent([0.1, 5]).on('zoom', e => g.attr('transform', e.transform)))
+
+    // Links
+    const link = g.append('g')
+      .attr('class', 'links')
+      .selectAll('line')
+      .data(links)
+      .join('line')
+      .style('stroke', 'var(--color-text-dim)')
+      .style('stroke-opacity', d => Math.min(0.06 + d.weight * 0.04, 0.3))
+      .style('stroke-width', d => Math.min(0.6 + d.weight * 0.4, 2.5))
+
+    // Nodes (circle + label grouped)
+    const node = g.append('g')
+      .attr('class', 'nodes')
+      .selectAll('g')
+      .data(nodes)
+      .join('g')
+      .style('cursor', 'grab')
+      .call(d3.drag()
+        .on('start', (event, d) => { if (!event.active) sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y })
+        .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y })
+        .on('end', (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null }))
+      .on('mouseover', (event, d) => {
+        const friends = [...(adj.get(d.id) || [])].map(id => byId.get(id)).filter(Boolean)
+          .sort((a, b) => b.count - a.count)
+        setTooltip({ x: event.clientX, y: event.clientY, name: d.name, count: d.count, friends: friends.map(f => f.name) })
+        const nbr = adj.get(d.id) || new Set()
+        link
+          .style('stroke', l => (l.source.id === d.id || l.target.id === d.id) ? 'var(--color-secondary)' : 'var(--color-text-dim)')
+          .style('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id) ? Math.min(0.3 + l.weight * 0.15, 0.85) : 0.02)
+        node.style('opacity', n => (n.id === d.id || nbr.has(n.id)) ? 1 : 0.12)
+        node.select('text').style('opacity', n => (n.id === d.id || nbr.has(n.id)) ? 1 : (n.count >= labelThreshold ? 0.15 : 0))
+      })
+      .on('mousemove', (event) => setTooltip(t => t ? { ...t, x: event.clientX, y: event.clientY } : t))
+      .on('mouseout', () => {
+        setTooltip(null)
+        link
+          .style('stroke', 'var(--color-text-dim)')
+          .style('stroke-opacity', l => Math.min(0.06 + l.weight * 0.04, 0.3))
+        node.style('opacity', 1)
+        node.select('text').style('opacity', n => n.count >= labelThreshold ? 1 : 0)
+      })
+
+    node.append('circle')
+      .attr('r', d => d.r)
+      .style('fill', 'var(--color-accent)')
+      .style('fill-opacity', 0.85)
+      .style('stroke', 'var(--color-accent)')
+      .style('stroke-opacity', 0.4)
+      .style('stroke-width', 0.5)
+
+    node.append('text')
+      .text(d => d.name)
+      .attr('text-anchor', 'middle')
+      .attr('dy', d => -d.r - 4)
+      .style('fill', 'var(--color-text)')
+      .style('font-size', d => `${Math.max(9, Math.min(d.r + 3, 15))}px`)
+      .style('font-weight', d => d.count >= labelThreshold ? 600 : 400)
+      .style('pointer-events', 'none')
+      .style('opacity', d => d.count >= labelThreshold ? 1 : 0)
+
+    // Dim anything that doesn't match the search (keeps layout intact)
+    if (q) {
+      node.style('opacity', n => n.name.toLowerCase().includes(q) ? 1 : 0.1)
+      node.select('text').style('opacity', n => n.name.toLowerCase().includes(q) ? 1 : 0)
     }
 
-    let running = true
-    const loop = () => {
-      if (!running) return
-      if (alphaRef.current > 0.02 || dragRef.current) {
-        step()
-        alphaRef.current *= 0.985
-        draw()
-        rafRef.current = requestAnimationFrame(loop)
-      } else {
-        draw()
-        running = false
-        rafRef.current = null
-      }
-    }
-    const wake = () => {
-      if (!running) { running = true; rafRef.current = requestAnimationFrame(loop) }
-    }
+    sim.on('tick', () => {
+      link
+        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
+      node.attr('transform', d => `translate(${d.x},${d.y})`)
+    })
 
-    // size the canvas to its container
-    const resize = () => {
-      const wrap = wrapRef.current
-      if (!wrap) return
-      const dpr = window.devicePixelRatio || 1
-      const w = wrap.clientWidth, h = wrap.clientHeight
-      viewRef.current.w = w; viewRef.current.h = h
-      canvas.width = w * dpr; canvas.height = h * dpr
-      canvas.style.width = w + 'px'; canvas.style.height = h + 'px'
-      wake()
-    }
-    resize()
-    const ro = new ResizeObserver(resize)
-    if (wrapRef.current) ro.observe(wrapRef.current)
+    return () => sim.stop()
+  }, [data, search])
 
-    // interaction
-    const worldAt = (e) => {
-      const rect = canvas.getBoundingClientRect()
-      const { scale, cx, cy, w, h } = viewRef.current
-      return {
-        x: cx + (e.clientX - rect.left - w / 2) / scale,
-        y: cy + (e.clientY - rect.top - h / 2) / scale,
-      }
-    }
-    const pick = (e) => {
-      const p = worldAt(e)
-      let best = null, bestD = Infinity
-      for (const n of nodes) {
-        const dx = n.x - p.x, dy = n.y - p.y
-        const d = Math.sqrt(dx * dx + dy * dy)
-        const hitR = Math.max(n.r, 6 / viewRef.current.scale)
-        if (d < hitR && d < bestD) { best = n; bestD = d }
-      }
-      return best
-    }
-    const onMove = (e) => {
-      if (dragRef.current) {
-        const p = worldAt(e)
-        dragRef.current.x = p.x; dragRef.current.y = p.y
-        dragRef.current.vx = 0; dragRef.current.vy = 0
-        wake(); return
-      }
-      const hit = pick(e)
-      const id = hit?.id || null
-      if (id !== hoverRef.current) {
-        hoverRef.current = id
-        canvas.style.cursor = id ? 'grab' : 'default'
-        if (id) {
-          const n = nodes.find(x => x.id === id)
-          const friends = [...(adjacency.get(id) || [])].map(fid => byId.get(fid)).filter(Boolean)
-            .sort((a, b) => b.count - a.count)
-          setInfo({ name: n.name, count: n.count, friends: friends.map(f => f.name) })
-        } else setInfo(null)
-        if (alphaRef.current <= 0.02 && !dragRef.current) draw() // redraw highlight when settled
-        else wake()
-      }
-    }
-    const onDown = (e) => {
-      const hit = pick(e)
-      if (hit) { dragRef.current = hit; canvas.style.cursor = 'grabbing'; alphaRef.current = Math.max(alphaRef.current, 0.15); wake() }
-    }
-    const onUp = () => { if (dragRef.current) { dragRef.current = null; canvas.style.cursor = 'grab' } }
-    const onLeave = () => { hoverRef.current = null; setInfo(null); if (alphaRef.current <= 0.02) draw() }
+  useEffect(() => {
+    const cleanup = buildGraph()
+    return cleanup
+  }, [buildGraph])
 
-    canvas.addEventListener('mousemove', onMove)
-    canvas.addEventListener('mousedown', onDown)
-    window.addEventListener('mouseup', onUp)
-    canvas.addEventListener('mouseleave', onLeave)
+  useEffect(() => {
+    if (!svgRef.current) return
+    const ro = new ResizeObserver(() => buildGraph())
+    ro.observe(svgRef.current)
+    return () => ro.disconnect()
+  }, [buildGraph])
 
-    alphaRef.current = 1
-    rafRef.current = requestAnimationFrame(loop)
+  const blankNote = data ? (data.blankActs ? `${data.blankActs} act${data.blankActs !== 1 ? 's' : ''} with no artist name (not shown)` : 'no blank-named acts') : ''
 
-    return () => {
-      running = false
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-      ro.disconnect()
-      canvas.removeEventListener('mousemove', onMove)
-      canvas.removeEventListener('mousedown', onDown)
-      window.removeEventListener('mouseup', onUp)
-      canvas.removeEventListener('mouseleave', onLeave)
-    }
-  }, [data]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const blankNote = useMemo(() => {
-    if (!data) return null
-    if (!data.blankActs) return 'no blank-named acts'
-    return `${data.blankActs} act${data.blankActs !== 1 ? 's' : ''} with no artist name (not shown)`
-  }, [data])
-
-  if (loading) return <div className="h-[68vh] rounded-xl bg-bg-card border border-border animate-pulse" />
+  if (loading) return <div className="h-[70vh] rounded-xl bg-bg-card border border-border animate-pulse" />
   if (error) return <div className="text-center py-16 text-accent text-sm">Couldn’t load the artist network: {error}</div>
   if (!data || data.nodes.length === 0) {
     return (
@@ -299,23 +182,35 @@ export default function ArtistNetwork() {
 
   return (
     <div>
-      <p className="text-xs text-text-dim mb-3">
-        {data.nodes.length} artists · {data.links.length.toLocaleString()} shared-show connections · {blankNote} ·
-        bigger circle = seen more · hover to trace who you saw together · drag to rearrange
-      </p>
-      <div ref={wrapRef} className="rounded-xl bg-bg-card border border-border overflow-hidden h-[68vh]">
-        <canvas ref={canvasRef} className="block w-full h-full" />
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <input
+          type="text"
+          placeholder="Highlight an artist..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="px-3 py-1.5 text-sm rounded-lg bg-bg-input border border-border text-text placeholder:text-text-dim focus:outline-none focus:border-secondary w-56"
+        />
+        <span className="text-xs text-text-dim">
+          {data.nodes.length} artists · {data.links.length.toLocaleString()} shared-show connections · {blankNote} · scroll to zoom · drag to pan/move
+        </span>
       </div>
-      <div className="mt-3 text-xs text-text-muted min-h-[1.25rem]">
-        {info && (
-          <>
-            <span className="font-semibold text-text">{info.name}</span> — seen {info.count}×
-            {info.friends.length > 0 && (
-              <span> · shared a bill with {info.friends.slice(0, 10).join(', ')}{info.friends.length > 10 ? ` +${info.friends.length - 10} more` : ''}</span>
-            )}
-          </>
-        )}
+      <div className="rounded-xl bg-bg-card border border-border overflow-hidden h-[70vh]">
+        <svg ref={svgRef} className="w-full h-full block" />
       </div>
+
+      {tooltip && (
+        <div
+          className="fixed z-50 pointer-events-none bg-bg-card border border-border rounded-lg px-3 py-2 text-sm shadow-xl max-w-xs"
+          style={{ left: tooltip.x + 14, top: tooltip.y - 10 }}
+        >
+          <div className="font-semibold text-text">{tooltip.name} <span className="text-text-dim font-normal">· seen {tooltip.count}×</span></div>
+          {tooltip.friends.length > 0 && (
+            <div className="text-text-muted text-xs mt-1">
+              with {tooltip.friends.slice(0, 12).join(', ')}{tooltip.friends.length > 12 ? ` +${tooltip.friends.length - 12} more` : ''}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
