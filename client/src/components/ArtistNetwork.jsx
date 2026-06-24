@@ -2,9 +2,19 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import * as d3 from 'd3'
 import { api } from '../lib/api'
 
-// Color a node by how many times the artist was seen.
-const FREQUENT_BLUE = '#3b82f6'
-const nodeColor = (count) => (count === 3 || count === 4) ? FREQUENT_BLUE : 'var(--color-accent)'
+// Color a node by how many times the artist was seen (a frequency heat scale).
+const FREQ_LEGEND = [
+  { label: '1×', color: '#fca5a5' },   // light red
+  { label: '2×', color: '#fde047' },   // light yellow
+  { label: '3–4×', color: '#3b82f6' }, // blue
+  { label: '5+×', color: '#22c55e' },  // green
+]
+const nodeColor = (count) => {
+  if (count >= 5) return '#22c55e'  // green
+  if (count >= 3) return '#3b82f6'  // blue (3–4)
+  if (count === 2) return '#fde047' // light yellow
+  return '#fca5a5'                  // light red (1)
+}
 
 // Force-directed "constellation" of artists, built with d3-force (same approach as the
 // SocialMedia_Mapper network graph): D3 owns the simulation and mutates the SVG directly
@@ -198,7 +208,7 @@ export default function ArtistNetwork() {
       .text(d => `${d.count}×`)
       .attr('text-anchor', 'middle')
       .attr('dy', '0.35em')
-      .style('fill', '#fff')
+      .style('fill', d => d.count >= 3 ? '#fff' : '#1f2937') // dark text on light red/yellow
       .style('font-size', '12px')
       .style('font-weight', 700)
       .style('pointer-events', 'none')
@@ -271,6 +281,15 @@ export default function ArtistNetwork() {
             </span>
           </>
         )}
+      </div>
+      <div className="flex items-center gap-3 mb-3 flex-wrap text-[11px] text-text-dim">
+        <span>Times seen:</span>
+        {FREQ_LEGEND.map(({ label, color }) => (
+          <span key={label} className="inline-flex items-center gap-1">
+            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+            {label}
+          </span>
+        ))}
       </div>
       <div className="rounded-xl bg-bg-card border border-border overflow-hidden h-[70vh]">
         <svg ref={svgRef} className="w-full h-full block" />
