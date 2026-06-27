@@ -371,7 +371,6 @@ app.get('/api/seatgeek/events', async (req, res) => {
     const baseParams = {
       'lat': '34.0522',
       'lon': '-118.2437',
-      'range': '50mi',
       'taxonomies.name': 'concert',
       'datetime_local.gte': today,
       'datetime_local.lte': future,
@@ -379,6 +378,13 @@ app.get('/api/seatgeek/events', async (req, res) => {
       'client_id': process.env.SEATGEEK_CLIENT_ID,
       ...(process.env.SEATGEEK_CLIENT_SECRET ? { 'client_secret': process.env.SEATGEEK_CLIENT_SECRET } : {}),
     };
+
+    // Try a 50mi radius, but auto-fall back to the long-proven 30mi if SeatGeek 406s the
+    // wider request. Explicit headers also avoid content-negotiation 406s from edge nodes.
+    const SG_HEADERS = { 'Accept': 'application/json', 'User-Agent': 'GigLog/1.0 (concert tracker)' };
+    let range = '50mi';
+    const sgFetch = (extra) =>
+      fetch(`https://api.seatgeek.com/2/events?${new URLSearchParams({ ...baseParams, range, ...extra })}`, { headers: SG_HEADERS });
 
     // 1. General LA events feed (discovery). SeatGeek caps per_page at 200 and sorts soonest-first,
     // so a single query only covers the next few weeks. Query month-by-month instead so all 6
@@ -388,17 +394,14 @@ app.get('/api/seatgeek/events', async (req, res) => {
     for (let m = 0; m < 12; m++) {
       const gteDate = m === 0 ? new Date() : (() => { const d = new Date(); d.setMonth(d.getMonth() + m); d.setDate(1); return d; })();
       const lteDate = (() => { const d = new Date(); d.setMonth(d.getMonth() + m + 1); d.setDate(1); return d; })();
-      const monthParams = new URLSearchParams({
-        ...baseParams,
+      const extra = {
         'datetime_local.gte': gteDate.toISOString().split('T')[0],
         'datetime_local.lte': lteDate.toISOString().split('T')[0],
         'per_page': '200',
-      });
-      const monthRes = await fetch(`https://api.seatgeek.com/2/events?${monthParams}`);
-      if (!monthRes.ok) {
-        if (m === 0) throw new Error(`SeatGeek API returned ${monthRes.status}`);
-        continue;
-      }
+      };
+      let monthRes = await sgFetch(extra);
+      if (monthRes.status === 406 && range === '50mi') { range = '30mi'; monthRes = await sgFetch(extra); }
+      if (!monthRes.ok) continue; // skip a bad month, never break the whole feed
       const monthData = await monthRes.json();
       for (const e of (monthData.events || [])) {
         if (!seenGeneral.has(e.id)) { seenGeneral.add(e.id); generalEvents.push(mapEvent(e)); }
@@ -431,8 +434,8 @@ app.get('/api/seatgeek/events', async (req, res) => {
 
     for (const artist of artistsToSearch) {
       try {
-        const artistParams = new URLSearchParams({ ...baseParams, 'per_page': '10', 'q': artist });
-        const artistRes = await fetch(`https://api.seatgeek.com/2/events?${artistParams}`);
+        let artistRes = await sgFetch({ 'per_page': '10', 'q': artist });
+        if (artistRes.status === 406 && range === '50mi') { range = '30mi'; artistRes = await sgFetch({ 'per_page': '10', 'q': artist }); }
         if (artistRes.ok) {
           const artistData = await artistRes.json();
           for (const e of (artistData.events || [])) {
@@ -454,6 +457,14 @@ app.get('/api/seatgeek/events', async (req, res) => {
       (a.date || '').localeCompare(b.date || '')
     );
 
+    // If the live fetch produced nothing, serve the last good cache (this key or the
+    // previous one) so the page never goes empty/broken.
+    if (events.length === 0) {
+      const fb = cached || await db.queryRow("SELECT response FROM seatgeek_cache WHERE cache_key = $1", ['seatgeek_la_concerts_6mo_v8']);
+      if (fb) return res.json(JSON.parse(fb.response));
+      return res.json([]);
+    }
+
     // Cache for 1 hour
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     await db.query(
@@ -464,7 +475,8 @@ app.get('/api/seatgeek/events', async (req, res) => {
     res.json(events);
   } catch (err) {
     console.error('SeatGeek fetch error:', err);
-    if (cached) return res.json(JSON.parse(cached.response));
+    const fb = cached || await db.queryRow("SELECT response FROM seatgeek_cache WHERE cache_key = $1", ['seatgeek_la_concerts_6mo_v8']);
+    if (fb) return res.json(JSON.parse(fb.response));
     res.status(500).json({ error: 'Failed to fetch events: ' + err.message });
   }
 });

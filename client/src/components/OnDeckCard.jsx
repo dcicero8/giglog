@@ -1,8 +1,14 @@
 export default function OnDeckCard({ event, onSave, onDismiss, isWishlist, isPastArtist, seenCount = 0 }) {
   const seenMultiple = seenCount > 1
-  const formattedDate = event.date
-    ? new Date(event.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const fmt = (d, withDow = true) => d
+    ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { ...(withDow ? { weekday: 'short' } : {}), month: 'short', day: 'numeric' })
     : ''
+  // A multi-night run shows a date range + night count instead of a single date
+  const isRun = event.nights > 1 && Array.isArray(event.runDates) && event.runDates.length > 1
+  const lastDate = isRun ? event.runDates[event.runDates.length - 1] : null
+  const formattedDate = isRun
+    ? `${fmt(event.date, false)} – ${fmt(lastDate, false)}`
+    : fmt(event.date)
 
   // Determine card style: wishlist > past artist > default
   const cardClass = isWishlist
@@ -70,7 +76,11 @@ export default function OnDeckCard({ event, onSave, onDismiss, isWishlist, isPas
 
         <div className="flex items-center gap-2 mt-2 text-xs text-text-muted">
           {formattedDate && <span>{formattedDate}</span>}
-          {event.time && <span className="text-text-dim">{event.time}</span>}
+          {isRun ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary/15 text-secondary font-medium">{event.nights} nights</span>
+          ) : (
+            event.time && <span className="text-text-dim">{event.time}</span>
+          )}
         </div>
 
         {/* Pricing */}

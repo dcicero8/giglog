@@ -4,7 +4,7 @@ import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import UpcomingCard from '../components/UpcomingCard'
 import OnDeckCard from '../components/OnDeckCard'
-import { onDeckMatchers, sortForYou } from '../lib/onDeck'
+import { onDeckMatchers, sortForYou, collapseRuns } from '../lib/onDeck'
 import StarRating from '../components/StarRating'
 import Modal from '../components/Modal'
 
@@ -225,9 +225,10 @@ export default function Upcoming() {
   const isWishlistMatch = matchers.isWishlist
   const isPastArtistMatch = matchers.isPast
 
-  // Push the shows you should know about (wishlist, then seen-before) to the top
+  // Collapse multi-night runs / duplicate listings, then push the shows you should
+  // know about (wishlist, then seen-before) to the top
   const visibleOnDeck = sortForYou(
-    onDeckEvents.filter(e => !dismissedArtists.has(e.artist)),
+    collapseRuns(onDeckEvents.filter(e => !dismissedArtists.has(e.artist))),
     matchers
   )
 
