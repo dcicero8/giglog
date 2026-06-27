@@ -77,7 +77,9 @@ export default function OnDeckCard({ event, onSave, onDismiss, isWishlist, isPas
         <div className="flex items-center gap-2 mt-2 text-xs text-text-muted">
           {formattedDate && <span>{formattedDate}</span>}
           {isRun ? (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary/15 text-secondary font-medium">{event.nights} nights</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: '#4f46e5' }}>
+              🌙 {event.nights} nights
+            </span>
           ) : (
             event.time && <span className="text-text-dim">{event.time}</span>
           )}
