@@ -115,6 +115,17 @@ CREATE TABLE IF NOT EXISTS venue_ratings (
   UNIQUE(venue, user_id)
 );
 
+-- Where to scout for upcoming shows (On Deck) — one row per user
+CREATE TABLE IF NOT EXISTS scouting_prefs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER UNIQUE,
+  city TEXT NOT NULL,
+  lat REAL NOT NULL,
+  lon REAL NOT NULL,
+  radius INTEGER NOT NULL DEFAULT 50,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- "Went with" tags: buddy users tagged on a concert
 CREATE TABLE IF NOT EXISTS concert_buddies (
   id SERIAL PRIMARY KEY,

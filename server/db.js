@@ -226,6 +226,11 @@ function initSQLite() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, venue TEXT NOT NULL, rating INTEGER, user_id INTEGER,
       updated_at TEXT DEFAULT (datetime('now')), UNIQUE(venue, user_id)
     );
+    CREATE TABLE IF NOT EXISTS scouting_prefs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER UNIQUE,
+      city TEXT NOT NULL, lat REAL NOT NULL, lon REAL NOT NULL,
+      radius INTEGER NOT NULL DEFAULT 50, updated_at TEXT DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS concert_buddies (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       concert_id INTEGER NOT NULL REFERENCES concerts(id) ON DELETE CASCADE,

@@ -59,6 +59,39 @@ export default function Upcoming() {
   const [onDeckError, setOnDeckError] = useState(null)
   const [dismissedArtists, setDismissedArtists] = useState(() => new Set(readOnDeckCache()?.dismissed || []))
 
+  // Scouting location (city + radius) — editable so non-LA users get local shows
+  const [scoutPrefs, setScoutPrefs] = useState(null)
+  const [locEditing, setLocEditing] = useState(false)
+  const [locForm, setLocForm] = useState({ city: '', radius: 50 })
+  const [locSaving, setLocSaving] = useState(false)
+  const [locError, setLocError] = useState(null)
+  const [onDeckRefresh, setOnDeckRefresh] = useState(0)
+
+  useEffect(() => {
+    api.get('/scouting-prefs').then(setScoutPrefs).catch(() => {})
+  }, [])
+
+  const saveLocation = async (e) => {
+    e?.preventDefault()
+    if (!locForm.city.trim()) return
+    setLocSaving(true)
+    setLocError(null)
+    try {
+      const prefs = await api.put('/scouting-prefs', { city: locForm.city, radius: locForm.radius })
+      setScoutPrefs(prefs)
+      setLocEditing(false)
+      // Refetch On Deck for the new location
+      setOnDeckEvents([])
+      setOnDeckLoading(true)
+      writeOnDeckCache({ available: true, events: [], dismissed: [...dismissedArtists] })
+      setOnDeckRefresh(k => k + 1)
+    } catch (err) {
+      setLocError(err.message)
+    } finally {
+      setLocSaving(false)
+    }
+  }
+
   useEffect(() => {
     const fetchSeatGeek = async () => {
       try {
@@ -84,7 +117,7 @@ export default function Upcoming() {
       }
     }
     fetchSeatGeek()
-  }, [])
+  }, [onDeckRefresh]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openAdd = () => {
     setForm(emptyForm)
@@ -328,7 +361,17 @@ export default function Upcoming() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider flex items-center gap-2">
                 <span className="text-warning">🎯</span> On Deck
-                <span className="text-text-dim font-normal normal-case tracking-normal">· LA Area · Next 12 Months</span>
+                <button
+                  onClick={() => {
+                    setLocForm({ city: scoutPrefs?.city || '', radius: scoutPrefs?.radius || 50 })
+                    setLocError(null)
+                    setLocEditing(v => !v)
+                  }}
+                  className="text-text-dim font-normal normal-case tracking-normal bg-transparent border-0 cursor-pointer p-0 hover:text-text transition-colors"
+                  title="Change scouting city & radius"
+                >
+                  · 📍 {scoutPrefs?.city || 'LA Area'} · {scoutPrefs?.radius || 50}mi · Next 12 Months <span className="text-secondary">✎</span>
+                </button>
               </h2>
               <div className="flex items-center gap-3">
                 {dismissedArtists.size > 0 && (
@@ -348,6 +391,42 @@ export default function Upcoming() {
               </div>
             </div>
 
+            {/* Location editor */}
+            {locEditing && (
+              <form onSubmit={saveLocation} className="flex items-center gap-2 mb-4 flex-wrap">
+                <input
+                  type="text"
+                  autoFocus
+                  value={locForm.city}
+                  onChange={e => setLocForm({ ...locForm, city: e.target.value })}
+                  placeholder='City (e.g. "Austin, TX" or "London, UK")'
+                  className="px-3 py-1.5 text-sm rounded-lg bg-bg-input border border-border text-text placeholder:text-text-dim focus:outline-none focus:border-secondary w-64"
+                />
+                <select
+                  value={locForm.radius}
+                  onChange={e => setLocForm({ ...locForm, radius: parseInt(e.target.value) })}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-bg-input border border-border text-text cursor-pointer"
+                >
+                  {[10, 25, 50, 75, 100].map(r => <option key={r} value={r}>{r} mi</option>)}
+                </select>
+                <button
+                  type="submit"
+                  disabled={locSaving || !locForm.city.trim()}
+                  className="px-4 py-1.5 text-sm font-semibold rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors border-0 cursor-pointer disabled:opacity-40"
+                >
+                  {locSaving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocEditing(false)}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-bg-input border border-border text-text-muted hover:text-text cursor-pointer"
+                >
+                  Cancel
+                </button>
+                {locError && <span className="text-xs text-accent">{locError}</span>}
+              </form>
+            )}
+
             {onDeckLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {[1, 2, 3, 4].map(i => (
@@ -364,7 +443,7 @@ export default function Upcoming() {
                 <p className="text-text-muted text-sm">
                   {dismissedArtists.size > 0
                     ? `All events hidden · ${dismissedArtists.size} artist${dismissedArtists.size !== 1 ? 's' : ''} dismissed`
-                    : 'No concerts found in the LA area for the next 12 months'
+                    : `No concerts found near ${scoutPrefs?.city || 'LA'} for the next 12 months`
                   }
                 </p>
               </div>

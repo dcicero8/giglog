@@ -333,6 +333,50 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
+// ── Scouting location (where On Deck looks for shows) ──
+const DEFAULT_SCOUTING = { city: 'Los Angeles, CA', lat: 34.0522, lon: -118.2437, radius: 50 };
+
+app.get('/api/scouting-prefs', async (req, res) => {
+  const row = await db.queryRow(
+    `SELECT city, lat, lon, radius FROM scouting_prefs WHERE ${US(1)}`,
+    [req.userId]
+  );
+  res.json(row || DEFAULT_SCOUTING);
+});
+
+app.put('/api/scouting-prefs', async (req, res) => {
+  const city = (req.body.city || '').trim();
+  if (!city) return res.status(400).json({ error: 'City is required' });
+  const radius = Math.min(Math.max(parseInt(req.body.radius) || 50, 5), 100);
+
+  // Geocode the city (cache first, then Nominatim)
+  let geo = await db.queryRow('SELECT lat, lon FROM geocode_cache WHERE city = $1', [city]);
+  if (!geo) {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}&limit=1`,
+      { headers: { 'User-Agent': 'GigLog/1.0' } }
+    );
+    const data = await response.json();
+    if (!data.length) return res.status(404).json({ error: `Couldn't find "${city}" — try "City, ST" or "City, Country"` });
+    geo = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    await db.query(
+      'INSERT INTO geocode_cache (city, lat, lon) VALUES ($1, $2, $3) ON CONFLICT (city) DO UPDATE SET lat = EXCLUDED.lat, lon = EXCLUDED.lon',
+      [city, geo.lat, geo.lon]
+    );
+  }
+
+  // Manual upsert (works with a NULL user_id in local no-auth mode)
+  const existing = await db.queryRow(`SELECT id FROM scouting_prefs WHERE ${US(1)}`, [req.userId]);
+  if (existing) {
+    await db.query('UPDATE scouting_prefs SET city = $1, lat = $2, lon = $3, radius = $4 WHERE id = $5',
+      [city, geo.lat, geo.lon, radius, existing.id]);
+  } else {
+    await db.query('INSERT INTO scouting_prefs (user_id, city, lat, lon, radius) VALUES ($1, $2, $3, $4, $5)',
+      [req.userId, city, geo.lat, geo.lon, radius]);
+  }
+  res.json({ city, lat: geo.lat, lon: geo.lon, radius });
+});
+
 // SeatGeek API proxy (CORS not supported by SeatGeek, so we proxy through server)
 app.get('/api/seatgeek/status', (req, res) => {
   res.json({ available: !!process.env.SEATGEEK_CLIENT_ID });
@@ -341,7 +385,12 @@ app.get('/api/seatgeek/status', (req, res) => {
 app.get('/api/seatgeek/events', async (req, res) => {
   if (!process.env.SEATGEEK_CLIENT_ID) return res.status(400).json({ error: 'SEATGEEK_CLIENT_ID not configured' });
 
-  const cacheKey = 'seatgeek_la_concerts_12mo_50mi_v9';
+  // Scout wherever this user set their location (default: LA)
+  const prefs = (await db.queryRow(
+    `SELECT city, lat, lon, radius FROM scouting_prefs WHERE ${US(1)}`,
+    [req.userId]
+  )) || DEFAULT_SCOUTING;
+  const cacheKey = `seatgeek_v10_${Number(prefs.lat).toFixed(2)}_${Number(prefs.lon).toFixed(2)}_${prefs.radius}mi`;
   const cached = await db.queryRow('SELECT response, expires_at FROM seatgeek_cache WHERE cache_key = $1', [cacheKey]);
   if (cached && new Date(cached.expires_at) > new Date()) {
     return res.json(JSON.parse(cached.response));
@@ -369,8 +418,8 @@ app.get('/api/seatgeek/events', async (req, res) => {
     futureDate.setMonth(futureDate.getMonth() + 12); // next 12 months
     const future = futureDate.toISOString().split('T')[0];
     const baseParams = {
-      'lat': '34.0522',
-      'lon': '-118.2437',
+      'lat': String(prefs.lat),
+      'lon': String(prefs.lon),
       'taxonomies.name': 'concert',
       'datetime_local.gte': today,
       'datetime_local.lte': future,
@@ -379,10 +428,10 @@ app.get('/api/seatgeek/events', async (req, res) => {
       ...(process.env.SEATGEEK_CLIENT_SECRET ? { 'client_secret': process.env.SEATGEEK_CLIENT_SECRET } : {}),
     };
 
-    // Try a 50mi radius, but auto-fall back to the long-proven 30mi if SeatGeek 406s the
-    // wider request. Explicit headers also avoid content-negotiation 406s from edge nodes.
+    // Use the user's radius, but auto-fall back to the long-proven 30mi if SeatGeek 406s
+    // the wider request. Explicit headers also avoid content-negotiation 406s from edge nodes.
     const SG_HEADERS = { 'Accept': 'application/json', 'User-Agent': 'GigLog/1.0 (concert tracker)' };
-    let range = '50mi';
+    let range = `${prefs.radius}mi`;
     const sgFetch = (extra) =>
       fetch(`https://api.seatgeek.com/2/events?${new URLSearchParams({ ...baseParams, range, ...extra })}`, { headers: SG_HEADERS });
 
@@ -400,7 +449,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
         'per_page': '200',
       };
       let monthRes = await sgFetch(extra);
-      if (monthRes.status === 406 && range === '50mi') { range = '30mi'; monthRes = await sgFetch(extra); }
+      if (monthRes.status === 406 && range !== '30mi') { range = '30mi'; monthRes = await sgFetch(extra); }
       if (!monthRes.ok) continue; // skip a bad month, never break the whole feed
       const monthData = await monthRes.json();
       for (const e of (monthData.events || [])) {
@@ -435,7 +484,7 @@ app.get('/api/seatgeek/events', async (req, res) => {
     for (const artist of artistsToSearch) {
       try {
         let artistRes = await sgFetch({ 'per_page': '10', 'q': artist });
-        if (artistRes.status === 406 && range === '50mi') { range = '30mi'; artistRes = await sgFetch({ 'per_page': '10', 'q': artist }); }
+        if (artistRes.status === 406 && range !== '30mi') { range = '30mi'; artistRes = await sgFetch({ 'per_page': '10', 'q': artist }); }
         if (artistRes.ok) {
           const artistData = await artistRes.json();
           for (const e of (artistData.events || [])) {
@@ -460,7 +509,10 @@ app.get('/api/seatgeek/events', async (req, res) => {
     // If the live fetch produced nothing, serve the last good cache (this key or the
     // previous one) so the page never goes empty/broken.
     if (events.length === 0) {
-      const fb = cached || await db.queryRow("SELECT response FROM seatgeek_cache WHERE cache_key = $1", ['seatgeek_la_concerts_6mo_v8']);
+      // Old LA cache is only a valid fallback for users still on the LA default
+      const fb = cached || (prefs === DEFAULT_SCOUTING
+        ? await db.queryRow("SELECT response FROM seatgeek_cache WHERE cache_key = $1", ['seatgeek_la_concerts_6mo_v8'])
+        : null);
       if (fb) return res.json(JSON.parse(fb.response));
       return res.json([]);
     }
@@ -475,7 +527,9 @@ app.get('/api/seatgeek/events', async (req, res) => {
     res.json(events);
   } catch (err) {
     console.error('SeatGeek fetch error:', err);
-    const fb = cached || await db.queryRow("SELECT response FROM seatgeek_cache WHERE cache_key = $1", ['seatgeek_la_concerts_6mo_v8']);
+    const fb = cached || (prefs === DEFAULT_SCOUTING
+      ? await db.queryRow("SELECT response FROM seatgeek_cache WHERE cache_key = $1", ['seatgeek_la_concerts_6mo_v8'])
+      : null);
     if (fb) return res.json(JSON.parse(fb.response));
     res.status(500).json({ error: 'Failed to fetch events: ' + err.message });
   }
