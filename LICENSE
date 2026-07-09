@@ -1,0 +1,32 @@
+Copyright (c) 2026 Derek Cicero. All rights reserved.
+
+GigLog — Source-Available License
+
+The source code in this repository is made publicly viewable for reference
+and portfolio purposes only. No license or right is granted to any other
+person to use, copy, modify, merge, publish, distribute, sublicense, sell,
+or host this software or any derivative of it, in whole or in part, for any
+purpose, commercial or otherwise, without the prior written permission of
+the copyright holder.
+
+Permitted without further permission:
+  - Viewing and reading the source code on this repository.
+  - Cloning the repository solely to review or evaluate the code locally.
+
+Everything else requires written permission, including but not limited to:
+  - Using the code (or portions of it) in another project or product.
+  - Redistributing the code in any form.
+  - Deploying or hosting the application for others.
+  - Creating derivative works.
+
+Third-party dependencies remain under their own licenses. Data provided by
+external services (setlist.fm, SeatGeek, OpenStreetMap/Nominatim, Google Gemini)
+remains subject to those services' terms.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING
+FROM THE USE OF THE SOFTWARE.
+
+For permission requests, contact the copyright holder.
