@@ -1,24 +1,24 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import db from '../db.js';
+import { photosDir, imageFilter, removeUpload } from '../uploads.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = Router();
 
 // User scope helper — shows own data only (dev mode with null userId sees everything)
 const US = (n) => `($${n}::int IS NULL OR user_id = $${n})`;
 
-// Photo upload config
+// Photo upload config — photosDir shares the base that /uploads serves from (and the
+// persistent volume in production), so photos don't 404 or vanish on redeploy.
 const storage = multer.diskStorage({
-  destination: path.join(__dirname, '..', '..', 'uploads', 'photos'),
+  destination: photosDir,
   filename: (req, file, cb) => {
     const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
     cb(null, uniqueName);
   },
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage, fileFilter: imageFilter, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // List all concerts (excludes festival children — they're nested under parents)
 router.get('/', async (req, res) => {
@@ -301,7 +301,11 @@ router.post('/:id/photos', upload.array('photos', 10), async (req, res) => {
     `SELECT * FROM concerts WHERE id = $1 AND ${US(2)}`,
     [req.params.id, req.userId]
   );
-  if (!concert) return res.status(404).json({ error: 'Concert not found' });
+  if (!concert) {
+    // multer already wrote the files before we could check ownership — remove them
+    for (const file of (req.files || [])) removeUpload(photosDir, file.filename);
+    return res.status(404).json({ error: 'Concert not found' });
+  }
 
   const photos = [];
   for (const file of req.files) {
@@ -315,8 +319,14 @@ router.post('/:id/photos', upload.array('photos', 10), async (req, res) => {
   res.status(201).json(photos);
 });
 
-// Get photos for a concert
+// Get photos for a concert (must be the owner's concert — photos aren't shared)
 router.get('/:id/photos', async (req, res) => {
+  const concert = await db.queryRow(
+    `SELECT id FROM concerts WHERE id = $1 AND ${US(2)}`,
+    [req.params.id, req.userId]
+  );
+  if (!concert) return res.status(404).json({ error: 'Concert not found' });
+
   const photos = await db.queryRows(
     'SELECT * FROM concert_photos WHERE concert_id = $1 ORDER BY created_at DESC',
     [req.params.id]
@@ -324,8 +334,14 @@ router.get('/:id/photos', async (req, res) => {
   res.json(photos);
 });
 
-// Delete photo
+// Delete photo — the concert must belong to the requester, not just exist
 router.delete('/:id/photos/:photoId', async (req, res) => {
+  const concert = await db.queryRow(
+    `SELECT id FROM concerts WHERE id = $1 AND ${US(2)}`,
+    [req.params.id, req.userId]
+  );
+  if (!concert) return res.status(404).json({ error: 'Concert not found' });
+
   const photo = await db.queryRow(
     'SELECT * FROM concert_photos WHERE id = $1 AND concert_id = $2',
     [req.params.photoId, req.params.id]
@@ -333,6 +349,7 @@ router.delete('/:id/photos/:photoId', async (req, res) => {
   if (!photo) return res.status(404).json({ error: 'Photo not found' });
 
   await db.query('DELETE FROM concert_photos WHERE id = $1', [req.params.photoId]);
+  removeUpload(photosDir, photo.filename); // don't leave the file orphaned on disk
   res.json({ message: 'Photo deleted' });
 });
 
@@ -354,8 +371,14 @@ router.post('/:id/links', async (req, res) => {
   res.status(201).json(link);
 });
 
-// Delete external link
+// Delete external link — the concert must belong to the requester, not just exist
 router.delete('/:id/links/:linkId', async (req, res) => {
+  const concert = await db.queryRow(
+    `SELECT id FROM concerts WHERE id = $1 AND ${US(2)}`,
+    [req.params.id, req.userId]
+  );
+  if (!concert) return res.status(404).json({ error: 'Concert not found' });
+
   const link = await db.queryRow(
     'SELECT * FROM external_links WHERE id = $1 AND concert_id = $2',
     [req.params.linkId, req.params.id]

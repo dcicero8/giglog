@@ -1,13 +1,18 @@
 import 'dotenv/config';
+// Express 4 doesn't catch rejected promises from async routes — without this, one
+// thrown DB error in any async handler crashes the whole process instead of 500ing.
+import 'express-async-errors';
 import express from 'express';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import db from './db.js';
+import { uploadsBase, ticketsDir, postersDir, imageFilter } from './uploads.js';
 import { setupAuth } from './auth.js';
 import requireAuth from './middleware/requireAuth.js';
 import concertsRouter from './routes/concerts.js';
@@ -27,14 +32,28 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
-app.use(cors({ origin: true, credentials: true }));
+// CORS is only needed in dev (Vite on :5173 proxying to :3001). In production the
+// client is served by this same Express app, so reflecting arbitrary origins with
+// credentials would only widen the attack surface for zero benefit.
+if (process.env.NODE_ENV !== 'production') {
+  app.use(cors({ origin: true, credentials: true }));
+}
 app.use(express.json({ limit: '10mb' }));
+
+// Session secret must be real in production — the dev fallback is public on GitHub,
+// which would let anyone forge login cookies. A random per-boot secret keeps the
+// site up (users just get logged out on restart) while making the gap unforgeable.
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+  console.error('[security] SESSION_SECRET is not set! Using a random per-boot secret — sessions will not survive restarts. Set SESSION_SECRET in Railway.');
+}
+const sessionSecret = process.env.SESSION_SECRET
+  || (process.env.NODE_ENV === 'production' ? crypto.randomBytes(32).toString('hex') : 'giglog-dev-secret-change-in-prod');
 
 // Session middleware — PgStore gets set up after db.init() connects
 // (placeholder — real store attached in startup block below)
 let sessionMiddleware;
 const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'giglog-dev-secret-change-in-prod',
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -55,16 +74,8 @@ app.use((req, res, next) => {
 // Auth setup (Google OAuth or unauthenticated mode)
 setupAuth(app);
 
-// In production, store uploads on persistent volume
-const uploadsBase = process.env.NODE_ENV === 'production' && fs.existsSync('/app/data')
-  ? '/app/data/uploads'
-  : path.join(__dirname, '..', 'uploads');
-const ticketsDir = path.join(uploadsBase, 'tickets');
-const postersDir = path.join(uploadsBase, 'posters');
-if (!fs.existsSync(ticketsDir)) fs.mkdirSync(ticketsDir, { recursive: true });
-if (!fs.existsSync(postersDir)) fs.mkdirSync(postersDir, { recursive: true });
-
-// Multer config for ticket images
+// Upload dirs + image-only filter are shared with routes/concerts.js (photos) so
+// every upload lands under the same base that /uploads serves from.
 const ticketStorage = multer.diskStorage({
   destination: ticketsDir,
   filename: (req, file, cb) => {
@@ -72,9 +83,8 @@ const ticketStorage = multer.diskStorage({
     cb(null, uniqueName);
   },
 });
-const ticketUpload = multer({ storage: ticketStorage, limits: { fileSize: 10 * 1024 * 1024 } });
+const ticketUpload = multer({ storage: ticketStorage, fileFilter: imageFilter, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// Multer config for poster images
 const posterStorage = multer.diskStorage({
   destination: postersDir,
   filename: (req, file, cb) => {
@@ -82,10 +92,13 @@ const posterStorage = multer.diskStorage({
     cb(null, uniqueName);
   },
 });
-const posterUpload = multer({ storage: posterStorage, limits: { fileSize: 10 * 1024 * 1024 } });
+const posterUpload = multer({ storage: posterStorage, fileFilter: imageFilter, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// Serve uploaded files (photos + tickets)
-app.use('/uploads', express.static(uploadsBase));
+// Serve uploaded files (photos + tickets). nosniff stops browsers from "helpfully"
+// executing a mislabeled upload as HTML.
+app.use('/uploads', express.static(uploadsBase, {
+  setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+}));
 
 // Apply auth middleware to all API routes
 app.use('/api', requireAuth);
@@ -1132,6 +1145,10 @@ app.post('/api/import', async (req, res) => {
 
 // Global error handler for unhandled async errors
 app.use((err, req, res, next) => {
+  // Client-fault upload errors (bad file type, too large) get a 400 with the reason
+  if (err.message?.startsWith('Only image uploads') || err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (10MB max)' : err.message });
+  }
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
